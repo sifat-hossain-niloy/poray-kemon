@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UniversityType {
+  public
+  private
+  international
+}
+
+enum Designation {
+  lecturer
+  assistant_professor
+  associate_professor
+  professor
+  adjunct
+  other
+}
+
+enum ProfessorStatus {
+  active
+  retired
+  unverified
+}
+
+enum ModerationStatus {
+  live
+  soft_flagged
+  flagged_hidden
+  deleted
+}
+
+enum ReviewStatus {
+  visible
+  hidden
+  deleted
+}
+
+enum ReportReason {
+  personal
+  fake
+  offensive
+  wrong_professor
+  other
+}
+
+enum ReportStatus {
+  pending
+  resolved_kept
+  resolved_removed
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Core entities
+// ─────────────────────────────────────────────────────────────────────────────
+
+model University {
+  id           Int            @id @default(autoincrement())
+  nameEn       String         @unique @map("name_en") @db.VarChar(200)
+  nameBn       String?        @map("name_bn") @db.VarChar(200)
+  shortName    String         @unique @map("short_name") @db.VarChar(20)
+  slug         String         @unique @db.VarChar(50)
+  locationCity String?        @map("location_city") @db.VarChar(100)
+  type         UniversityType
+  websiteUrl   String?        @map("website_url") @db.VarChar(255)
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  departments Department[]
+  professors  Professor[]
+
+  @@map("universities")
+}
+
+model Department {
+  id           Int      @id @default(autoincrement())
+  universityId Int      @map("university_id")
+  nameEn       String   @map("name_en") @db.VarChar(200)
+  nameBn       String?  @map("name_bn") @db.VarChar(200)
+  shortName    String?  @map("short_name") @db.VarChar(20)
+  slug         String?  @db.VarChar(50)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  university University @relation(fields: [universityId], references: [id])
+  professors Professor[]
+  courses    Course[]
+
+  @@unique([universityId, shortName])
+  @@unique([universityId, slug])
+  @@map("departments")
+}
+
+model Professor {
+  id           Int             @id @default(autoincrement())
+  universityId Int             @map("university_id")
+  departmentId Int             @map("department_id")
+  nameEn       String          @map("name_en") @db.VarChar(200)
+  nameBn       String?         @map("name_bn") @db.VarChar(200)
+  designation  Designation?
+  status       ProfessorStatus @default(unverified)
+  slug         String          @unique @db.VarChar(255)
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  university       University        @relation(fields: [universityId], references: [id])
+  department       Department        @relation(fields: [departmentId], references: [id])
+  professorCourses ProfessorCourse[]
+
+  @@index([universityId, departmentId])
+  @@map("professors")
+}
+
+model Course {
+  id           Int      @id @default(autoincrement())
+  departmentId Int      @map("department_id")
+  courseCode   String?  @map("course_code") @db.VarChar(20)
+  courseName   String   @map("course_name") @db.VarChar(200)
+  slug         String?  @db.VarChar(100)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  department       Department        @relation(fields: [departmentId], references: [id])
+  professorCourses ProfessorCourse[]
+
+  @@unique([departmentId, courseCode])
+  @@map("courses")
+}
+
+// The core aggregation unit: one professor teaching one course
+model ProfessorCourse {
+  id                  Int      @id @default(autoincrement())
+  professorId         Int      @map("professor_id")
+  courseId            Int      @map("course_id")
+  reviewCount         Int      @default(0) @map("review_count")
+  avgTeachingQuality  Decimal? @map("avg_teaching_quality") @db.Decimal(3, 2)
+  avgGradingFairness  Decimal? @map("avg_grading_fairness") @db.Decimal(3, 2)
+  avgCourseDifficulty Decimal? @map("avg_course_difficulty") @db.Decimal(3, 2)
+  avgAttendance       Decimal? @map("avg_attendance") @db.Decimal(3, 2)
+  wouldRecommendPct   Decimal? @map("would_recommend_pct") @db.Decimal(5, 2)
+  overallScore        Decimal? @map("overall_score") @db.Decimal(3, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  professor         Professor          @relation(fields: [professorId], references: [id])
+  course            Course             @relation(fields: [courseId], references: [id])
+  reviews           Review[]
+  reviewSubmissions ReviewSubmission[]
+
+  @@unique([professorId, courseId])
+  @@map("professor_courses")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews — NO user_id. Authorship is permanently anonymous.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Review {
+  id                  Int              @id @default(autoincrement())
+  professorCourseId   Int              @map("professor_course_id")
+  teachingQuality     Int              @map("teaching_quality") @db.SmallInt
+  gradingFairness     Int              @map("grading_fairness") @db.SmallInt
+  courseDifficulty    Int              @map("course_difficulty") @db.SmallInt
+  attendanceStrictness Int             @map("attendance_strictness") @db.SmallInt
+  wouldRecommend      Boolean          @map("would_recommend")
+  reviewText          String?          @map("review_text")
+  tags                String[]
+  helpfulCount        Int              @default(0) @map("helpful_count")
+  moderationStatus    ModerationStatus @default(live) @map("moderation_status")
+  moderationReason    String?          @map("moderation_reason") @db.VarChar(200)
+  moderationNotes     String?          @map("moderation_notes")
+  status              ReviewStatus     @default(visible)
+  submittedAt         DateTime         @default(now()) @map("submitted_at")
+
+  professorCourse ProfessorCourse @relation(fields: [professorCourseId], references: [id])
+  helpfulVotes    HelpfulVote[]
+  reports         Report[]
+
+  // No user relation — review authorship is permanently anonymous
+
+  @@index([professorCourseId, helpfulCount(sort: Desc)], map: "reviews_by_helpful_idx")
+  @@index([professorCourseId, submittedAt(sort: Desc)], map: "reviews_by_recent_idx")
+  @@index([moderationStatus], map: "reviews_moderation_idx")
+  @@map("reviews")
+}
+
+// Tracks who reviewed which professor+course.
+// Intentionally decoupled from reviews — no shared foreign key.
+model ReviewSubmission {
+  id                Int      @id @default(autoincrement())
+  userId            String   @map("user_id") @db.Uuid
+  professorCourseId Int      @map("professor_course_id")
+  submittedAt       DateTime @default(now()) @map("submitted_at")
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  professorCourse ProfessorCourse @relation(fields: [professorCourseId], references: [id])
+
+  @@unique([userId, professorCourseId])
+  @@map("review_submissions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Users — no email stored
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  googleId    String   @unique @map("google_id") @db.VarChar(255)
+  displayName String?  @map("display_name") @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at")
+  lastActive  DateTime? @map("last_active")
+
+  reviewSubmissions ReviewSubmission[]
+  helpfulVotes      HelpfulVote[]
+
+  // No email column — intentional. Reduces PII footprint.
+  @@map("users")
+}
+
+model HelpfulVote {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id") @db.Uuid
+  reviewId  Int      @map("review_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reviewId])
+  @@map("helpful_votes")
+}
+
+model Report {
+  id          Int          @id @default(autoincrement())
+  reviewId    Int          @map("review_id")
+  reason      ReportReason
+  details     String?
+  status      ReportStatus @default(pending)
+  submittedAt DateTime     @default(now()) @map("submitted_at")
+  resolvedAt  DateTime?    @map("resolved_at")
+
+  review Review @relation(fields: [reviewId], references: [id])
+
+  @@map("reports")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin — separate auth, bcrypt passwords
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AdminUser {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique @db.VarChar(100)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastLogin    DateTime? @map("last_login")
+
+  @@map("admin_users")
+}

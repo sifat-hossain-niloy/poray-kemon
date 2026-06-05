@@ -1,0 +1,76 @@
+name: poraykemon
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: poraykemon_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: poraykemon
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: poraykemon
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U poraykemon -d poraykemon']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: poraykemon_postgres_test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: poraykemon
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: poraykemon_test
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata_test:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U poraykemon -d poraykemon_test']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: poraykemon_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: poraykemon_umami
+    restart: unless-stopped
+    ports:
+      - '3001:3000'
+    environment:
+      DATABASE_URL: postgresql://poraykemon:secret@postgres:5432/umami
+      DATABASE_TYPE: postgresql
+      APP_SECRET: umami-app-secret-change-in-prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+    driver: local
+  pgdata_test:
+    driver: local
+  redisdata:
+    driver: local

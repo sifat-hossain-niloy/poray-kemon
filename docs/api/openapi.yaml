@@ -1,0 +1,1004 @@
+openapi: 3.1.0
+
+info:
+  title: Poray Kemon API
+  version: 1.0.0
+  description: |
+    Anonymous professor & course rating platform for Bangladeshi universities.
+
+    ## Authentication
+
+    Read endpoints are fully public. Write endpoints require a valid session cookie
+    obtained via Google OAuth (`/api/auth/signin/google`).
+
+    The session cookie is set by NextAuth.js after successful OAuth.
+    All authenticated endpoints return `401` if the session is missing or expired.
+
+    ## Anonymity Note
+
+    The review submission endpoint (`POST /api/reviews`) requires authentication
+    but stores NO user identity in the `reviews` table. Authentication is used
+    only to enforce the one-review-per-professor-course-per-account rule.
+
+  contact:
+    name: Poray Kemon
+    url: https://poraykemon.com
+  license:
+    name: Private
+
+servers:
+  - url: https://poraykemon.com/api
+    description: Production
+  - url: http://localhost:3000/api
+    description: Local development
+
+tags:
+  - name: Universities
+    description: University and department directory
+  - name: Professors
+    description: Professor profiles and search
+  - name: Reviews
+    description: Review submission and retrieval
+  - name: Votes
+    description: Helpful vote system (requires auth)
+  - name: Reports
+    description: Review reporting
+  - name: Stats
+    description: Site-wide statistics
+  - name: Auth
+    description: Google OAuth authentication (managed by NextAuth)
+  - name: Admin
+    description: Admin panel endpoints (requires admin session)
+
+# ─────────────────────────────────────────────────────────────
+# Shared Schemas
+# ─────────────────────────────────────────────────────────────
+components:
+  schemas:
+    University:
+      type: object
+      properties:
+        id:
+          type: integer
+        name_en:
+          type: string
+          example: 'North South University'
+        name_bn:
+          type: string
+          example: 'নর্থ সাউথ ইউনিভার্সিটি'
+        short_name:
+          type: string
+          example: 'NSU'
+        slug:
+          type: string
+          example: 'nsu'
+        location_city:
+          type: string
+          example: 'Dhaka'
+        type:
+          type: string
+          enum: [public, private, international]
+        department_count:
+          type: integer
+        review_count:
+          type: integer
+
+    Department:
+      type: object
+      properties:
+        id:
+          type: integer
+        name_en:
+          type: string
+          example: 'Computer Science & Engineering'
+        name_bn:
+          type: string
+          example: 'কম্পিউটার সায়েন্স'
+        short_name:
+          type: string
+          example: 'CSE'
+        slug:
+          type: string
+          example: 'cse'
+        professor_count:
+          type: integer
+        review_count:
+          type: integer
+
+    ProfessorSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+          example: 'dr-mohammad-rahman'
+        name_en:
+          type: string
+          example: 'Dr. Mohammad Rahman'
+        name_bn:
+          type: string
+          nullable: true
+        university:
+          type: string
+          example: 'NSU'
+        department:
+          type: string
+          example: 'CSE'
+        overall_score:
+          type: number
+          format: float
+          nullable: true
+          description: Weighted average across all courses. Null if no reviews yet.
+        total_review_count:
+          type: integer
+        course_count:
+          type: integer
+        top_tags:
+          type: array
+          items:
+            type: string
+          maxItems: 2
+          example: ['বোর্ডে বোঝান', 'প্রশ্ন নেন']
+
+    CourseAggregate:
+      type: object
+      properties:
+        course_code:
+          type: string
+          example: 'CSE 301'
+        course_name:
+          type: string
+          example: 'Data Structures'
+        course_slug:
+          type: string
+          example: 'cse-301-data-structures'
+        avg_teaching_quality:
+          type: number
+          format: float
+          example: 4.2
+        avg_grading_fairness:
+          type: number
+          format: float
+          example: 3.8
+        avg_course_difficulty:
+          type: number
+          format: float
+          example: 3.5
+        avg_attendance:
+          type: number
+          format: float
+          example: 4.0
+        would_recommend_pct:
+          type: number
+          format: float
+          example: 78.5
+          description: Percentage (0-100)
+        overall_score:
+          type: number
+          format: float
+          example: 3.9
+        review_count:
+          type: integer
+          example: 12
+        top_tags:
+          type: array
+          items:
+            type: string
+
+    ProfessorProfile:
+      allOf:
+        - $ref: '#/components/schemas/ProfessorSummary'
+        - type: object
+          properties:
+            designation:
+              type: string
+              enum: [lecturer, assistant_professor, associate_professor, professor, adjunct, other]
+              nullable: true
+            status:
+              type: string
+              enum: [active, retired, unverified]
+            avg_teaching_quality:
+              type: number
+              format: float
+              description: Weighted average across all courses
+            avg_grading_fairness:
+              type: number
+              format: float
+            avg_course_difficulty:
+              type: number
+              format: float
+            avg_attendance:
+              type: number
+              format: float
+            would_recommend_pct:
+              type: number
+              format: float
+            courses:
+              type: array
+              items:
+                $ref: '#/components/schemas/CourseAggregate'
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: integer
+        teaching_quality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        grading_fairness:
+          type: integer
+          minimum: 1
+          maximum: 5
+        course_difficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+        attendance_strictness:
+          type: integer
+          minimum: 1
+          maximum: 5
+        would_recommend:
+          type: boolean
+        review_text:
+          type: string
+          nullable: true
+          maxLength: 500
+        tags:
+          type: array
+          items:
+            type: string
+        helpful_count:
+          type: integer
+          example: 7
+        submitted_at:
+          type: string
+          format: date-time
+        user_voted:
+          type: boolean
+          nullable: true
+          description: Whether the current authenticated user has voted on this review. Null for unauthenticated requests.
+
+    ReviewSubmitBody:
+      type: object
+      required:
+        - professor_id
+        - course_code
+        - teaching_quality
+        - grading_fairness
+        - course_difficulty
+        - attendance_strictness
+        - would_recommend
+      properties:
+        professor_id:
+          type: integer
+        course_code:
+          type: string
+          example: 'CSE 301'
+        course_name:
+          type: string
+          description: Required if course_code is not recognized in the system
+          example: 'Data Structures'
+        teaching_quality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        grading_fairness:
+          type: integer
+          minimum: 1
+          maximum: 5
+        course_difficulty:
+          type: integer
+          minimum: 1
+          maximum: 5
+        attendance_strictness:
+          type: integer
+          minimum: 1
+          maximum: 5
+        would_recommend:
+          type: boolean
+        review_text:
+          type: string
+          nullable: true
+          minLength: 20
+          maxLength: 500
+        tags:
+          type: array
+          items:
+            type: string
+        honeypot_field:
+          type: string
+          description: Must be empty. Bot detection.
+
+    SiteStats:
+      type: object
+      properties:
+        total_reviews:
+          type: integer
+        total_professors:
+          type: integer
+        total_courses_reviewed:
+          type: integer
+        total_universities:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          nullable: true
+
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+      description: Session cookie set by NextAuth after Google OAuth
+
+# ─────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────
+paths:
+  # ── Universities ─────────────────────────────────────────────
+
+  /universities:
+    get:
+      tags: [Universities]
+      summary: List all universities
+      description: Returns all universities with department count and total review count.
+      responses:
+        '200':
+          description: List of universities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/University'
+
+  /universities/{slug}/departments:
+    get:
+      tags: [Universities]
+      summary: List departments for a university
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          example: nsu
+      responses:
+        '200':
+          description: Departments with professor + review counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  university:
+                    $ref: '#/components/schemas/University'
+                  departments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Department'
+        '404':
+          description: University not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Professors ───────────────────────────────────────────────
+
+  /professors/search:
+    get:
+      tags: [Professors]
+      summary: Search professors
+      description: |
+        Full-text + fuzzy search across professor names, departments, and universities.
+        Uses PostgreSQL `pg_trgm` for typo-tolerant matching.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+          description: Search query
+          example: 'Rahman'
+        - name: university
+          in: query
+          schema:
+            type: string
+          description: Filter by university slug
+          example: 'nsu'
+        - name: department
+          in: query
+          schema:
+            type: string
+          description: Filter by department slug
+          example: 'cse'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProfessorSummary'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+
+  /professors/{slug}:
+    get:
+      tags: [Professors]
+      summary: Get professor profile
+      description: |
+        Returns full professor profile with:
+        - Combined weighted score across all courses
+        - Per-course aggregate score cards
+        Both levels are always returned simultaneously.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 'dr-mohammad-rahman'
+      responses:
+        '200':
+          description: Professor profile with course aggregates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfessorProfile'
+        '404':
+          description: Professor not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /professors/{slug}/{course-slug}/reviews:
+    get:
+      tags: [Professors]
+      summary: Get reviews for a professor + course
+      description: |
+        Paginated list of individual reviews for a specific professor teaching
+        a specific course. Sorted by `helpful_count DESC` by default.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: course-slug
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 'cse-301-data-structures'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [helpful, recent]
+            default: helpful
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        '200':
+          description: Paginated reviews
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reviews:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Review'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+        '404':
+          description: Professor or course not found
+
+  # ── Reviews ──────────────────────────────────────────────────
+
+  /reviews:
+    post:
+      tags: [Reviews]
+      summary: Submit a review
+      description: |
+        Submit an anonymous review for a professor + course.
+
+        **Authentication required.** The review record stores NO user identity.
+        Authentication is used only to enforce the one-review-per-professor-course-per-account rule.
+
+        Server logic:
+        1. Verify session (401 if missing)
+        2. Validate request body (Zod)
+        3. Check honeypot field
+        4. Run moderation check (hard block → 400, soft flag → proceed)
+        5. Find or create Course record
+        6. Find or create ProfessorCourse record
+        7. BEGIN TRANSACTION:
+           a. Check review_submissions — reject 409 if already reviewed
+           b. INSERT into reviews (NO user_id)
+           c. INSERT into review_submissions (user_id, professor_course_id)
+           d. UPDATE running averages on professor_courses
+           COMMIT
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewSubmitBody'
+      responses:
+        '201':
+          description: Review submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'রিভিউ জমা হয়েছে'
+        '400':
+          description: Validation error or moderation block
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: 'আপত্তিজনক শব্দ ব্যবহার করা যাবে না'
+                  code:
+                    type: string
+                    example: 'MODERATION_HARD_BLOCK'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: User has already reviewed this professor+course
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: 'আপনি এই কোর্সে ইতিমধ্যে রিভিউ দিয়েছেন।'
+                  code:
+                    type: string
+                    example: 'ALREADY_REVIEWED'
+
+  # ── Helpful Votes ─────────────────────────────────────────────
+
+  /reviews/{id}/helpful:
+    post:
+      tags: [Votes]
+      summary: Toggle helpful vote on a review
+      description: |
+        Marks a review as helpful (or removes the mark if already voted).
+        Toggle semantics — one POST either adds or removes the vote.
+
+        **Authentication required.**
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vote toggled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  helpful_count:
+                    type: integer
+                    example: 43
+                  voted:
+                    type: boolean
+                    example: true
+        '401':
+          description: Not authenticated
+        '404':
+          description: Review not found
+
+    get:
+      tags: [Votes]
+      summary: Get helpful vote status for a review
+      description: Returns helpful count and whether the current user has voted.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vote status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  helpful_count:
+                    type: integer
+                  voted:
+                    type: boolean
+        '401':
+          description: Not authenticated
+
+  # ── Reports ───────────────────────────────────────────────────
+
+  /reports:
+    post:
+      tags: [Reports]
+      summary: Report a review
+      description: |
+        Submit a report on a review. No authentication required.
+
+        Auto-hide triggered when a review accumulates 3 or more pending reports
+        (`moderation_status` set to `flagged_hidden`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [review_id, reason]
+              properties:
+                review_id:
+                  type: integer
+                reason:
+                  type: string
+                  enum: [personal, fake, offensive, wrong_professor, other]
+                details:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '201':
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 'রিপোর্ট জমা হয়েছে।'
+        '404':
+          description: Review not found
+
+  # ── Stats ─────────────────────────────────────────────────────
+
+  /stats:
+    get:
+      tags: [Stats]
+      summary: Site-wide statistics
+      description: Returns aggregate counts for the homepage.
+      responses:
+        '200':
+          description: Site stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteStats'
+
+  # ── Auth (NextAuth managed) ───────────────────────────────────
+
+  /auth/signin:
+    get:
+      tags: [Auth]
+      summary: Initiate Google OAuth sign-in
+      description: Redirects to Google OAuth consent screen. Managed by NextAuth.js.
+      responses:
+        '302':
+          description: Redirect to Google
+
+  /auth/callback/google:
+    get:
+      tags: [Auth]
+      summary: Google OAuth callback
+      description: Handles OAuth code exchange. Managed by NextAuth.js. Creates user record if new.
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to app after successful auth
+
+  /auth/session:
+    get:
+      tags: [Auth]
+      summary: Get current session
+      responses:
+        '200':
+          description: Current session or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          displayName:
+                            type: string
+                  - type: 'null'
+
+  /auth/signout:
+    post:
+      tags: [Auth]
+      summary: Sign out
+      description: Clears session cookie and deletes session from Redis.
+      responses:
+        '200':
+          description: Signed out
+
+  # ── Admin ─────────────────────────────────────────────────────
+
+  /admin/reports:
+    get:
+      tags: [Admin]
+      summary: List reports
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, resolved_kept, resolved_removed]
+            default: pending
+      responses:
+        '200':
+          description: Reports list
+        '401':
+          description: Not admin
+
+  /admin/reports/{id}/resolve:
+    post:
+      tags: [Admin]
+      summary: Resolve a report
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [keep, remove]
+      responses:
+        '200':
+          description: Report resolved
+
+  /admin/reviews/{id}:
+    delete:
+      tags: [Admin]
+      summary: Delete a review
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Review deleted
+
+  /admin/reviews/{id}/status:
+    patch:
+      tags: [Admin]
+      summary: Update review visibility status
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [visible, hidden]
+      responses:
+        '200':
+          description: Status updated
+
+  /admin/professors:
+    post:
+      tags: [Admin]
+      summary: Create a professor profile
+      security:
+        - sessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name_en, university_id, department_id]
+              properties:
+                name_en:
+                  type: string
+                name_bn:
+                  type: string
+                university_id:
+                  type: integer
+                department_id:
+                  type: integer
+                designation:
+                  type: string
+                  enum:
+                    [lecturer, assistant_professor, associate_professor, professor, adjunct, other]
+      responses:
+        '201':
+          description: Professor created
+
+  /admin/professors/{id}:
+    patch:
+      tags: [Admin]
+      summary: Update a professor profile
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name_en:
+                  type: string
+                name_bn:
+                  type: string
+                designation:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, retired, unverified]
+      responses:
+        '200':
+          description: Professor updated
+
+  /admin/universities:
+    post:
+      tags: [Admin]
+      summary: Add a university
+      security:
+        - sessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name_en, short_name, slug]
+              properties:
+                name_en:
+                  type: string
+                name_bn:
+                  type: string
+                short_name:
+                  type: string
+                slug:
+                  type: string
+                location_city:
+                  type: string
+                type:
+                  type: string
+                  enum: [public, private, international]
+      responses:
+        '201':
+          description: University created
+
+  /admin/departments:
+    post:
+      tags: [Admin]
+      summary: Add a department
+      security:
+        - sessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name_en, short_name, university_id]
+              properties:
+                name_en:
+                  type: string
+                name_bn:
+                  type: string
+                short_name:
+                  type: string
+                slug:
+                  type: string
+                university_id:
+                  type: integer
+      responses:
+        '201':
+          description: Department created
