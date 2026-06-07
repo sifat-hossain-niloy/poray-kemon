@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { HelpfulButton } from '@/components/review/HelpfulButton'
+import { ReportButton } from '@/components/review/ReportButton'
 import { STRINGS } from '@/lib/strings'
 
 // Display data for one review. Note: NO user fields exist — by design.
@@ -77,16 +78,19 @@ export function ReviewCard({ review, userVoted = false }: Props) {
           </div>
         ) : null}
 
-        {/* Footer row — date + helpful */}
+        {/* Footer row — date + actions */}
         <div className="flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
           <time dateTime={review.submittedAt.toISOString()}>
             {dateFormatter.format(review.submittedAt)}
           </time>
-          <HelpfulButton
-            reviewId={review.id}
-            initialHelpfulCount={review.helpfulCount}
-            initialVoted={userVoted}
-          />
+          <div className="flex items-center gap-3">
+            <ReportButton reviewId={review.id} />
+            <HelpfulButton
+              reviewId={review.id}
+              initialHelpfulCount={review.helpfulCount}
+              initialVoted={userVoted}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>
