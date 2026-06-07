@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { STRINGS } from '@/lib/strings'
+import { useLocale, useStrings } from '@/lib/i18n/client'
+import { BN } from '@/lib/i18n/strings-bn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -35,24 +36,30 @@ interface Props {
   displayName: string
 }
 
-// Tags pulled from STRINGS.tags — single source of truth
-const TAG_LABELS = STRINGS.tags
-type TagKey = keyof typeof TAG_LABELS
+// Tag KEYS are the Bangla identifiers (the persisted data model). Use BN as
+// the canonical keyset so the type stays stable regardless of active locale.
+type TagKey = keyof typeof BN.tags
 
-const RATING_LABELS: {
-  key: 'teaching_quality' | 'grading_fairness' | 'course_difficulty' | 'attendance_strictness'
-  label: string
-}[] = [
-  { key: 'teaching_quality', label: STRINGS.review.teachingQualityLabel },
-  { key: 'grading_fairness', label: STRINGS.review.gradingFairnessLabel },
-  { key: 'course_difficulty', label: STRINGS.review.courseDifficultyLabel },
-  { key: 'attendance_strictness', label: STRINGS.review.attendanceLabel },
-]
+type RatingKey =
+  | 'teaching_quality'
+  | 'grading_fairness'
+  | 'course_difficulty'
+  | 'attendance_strictness'
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ReviewForm({ universities, preselectedProfessor, displayName }: Props) {
   const router = useRouter()
+  const strings = useStrings()
+  const locale = useLocale()
+
+  const TAG_LABELS = strings.tags
+  const RATING_LABELS: { key: RatingKey; label: string }[] = [
+    { key: 'teaching_quality', label: strings.review.teachingQualityLabel },
+    { key: 'grading_fairness', label: strings.review.gradingFairnessLabel },
+    { key: 'course_difficulty', label: strings.review.courseDifficultyLabel },
+    { key: 'attendance_strictness', label: strings.review.attendanceLabel },
+  ]
 
   // Professor / course
   const [universityId, setUniversityId] = useState<number | ''>(
@@ -100,20 +107,47 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
     setTags((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
   }
 
+  const t =
+    locale === 'en'
+      ? {
+          pickUni: 'Pick a university',
+          pickDept: 'Pick a department',
+          needName: "Enter the professor's name",
+          needCourse: 'Enter the course name',
+          needTeaching: 'Rate teaching quality',
+          needGrading: 'Rate grading fairness',
+          needDifficulty: 'Rate course difficulty',
+          needAttendance: 'Rate attendance strictness',
+          needRecommend: 'Tell us if you would take this again',
+          tooShort: 'The review must be at least 20 characters (or leave it blank)',
+        }
+      : {
+          pickUni: 'বিশ্ববিদ্যালয় বেছে নিন',
+          pickDept: 'বিভাগ বেছে নিন',
+          needName: 'শিক্ষকের নাম দিন',
+          needCourse: 'কোর্সের নাম দিন',
+          needTeaching: 'পড়ানোর মান রেট করুন',
+          needGrading: 'নম্বরের ন্যায্যতা রেট করুন',
+          needDifficulty: 'কোর্সের কঠিনত্ব রেট করুন',
+          needAttendance: 'উপস্থিতির বাধ্যবাধকতা রেট করুন',
+          needRecommend: 'আবার নেবেন কিনা জানান',
+          tooShort: 'রিভিউ কমপক্ষে ২০ অক্ষরের হতে হবে (বা খালি রাখুন)',
+        }
+
   function validate(): string | null {
     if (!professorId) {
-      if (!universityId) return 'বিশ্ববিদ্যালয় বেছে নিন'
-      if (!departmentId) return 'বিভাগ বেছে নিন'
-      if (!professorNameEn.trim()) return 'শিক্ষকের নাম দিন'
+      if (!universityId) return t.pickUni
+      if (!departmentId) return t.pickDept
+      if (!professorNameEn.trim()) return t.needName
     }
-    if (!courseName.trim()) return 'কোর্সের নাম দিন'
-    if (!teachingQuality) return 'পড়ানোর মান রেট করুন'
-    if (!gradingFairness) return 'নম্বরের ন্যায্যতা রেট করুন'
-    if (!courseDifficulty) return 'কোর্সের কঠিনত্ব রেট করুন'
-    if (!attendanceStrictness) return 'উপস্থিতির বাধ্যবাধকতা রেট করুন'
-    if (wouldRecommend === null) return 'আবার নেবেন কিনা জানান'
+    if (!courseName.trim()) return t.needCourse
+    if (!teachingQuality) return t.needTeaching
+    if (!gradingFairness) return t.needGrading
+    if (!courseDifficulty) return t.needDifficulty
+    if (!attendanceStrictness) return t.needAttendance
+    if (wouldRecommend === null) return t.needRecommend
     const text = reviewText.trim()
-    if (text && text.length < 20) return 'রিভিউ কমপক্ষে ২০ অক্ষরের হতে হবে (বা খালি রাখুন)'
+    if (text && text.length < 20) return t.tooShort
     return null
   }
 
@@ -161,7 +195,8 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
       }
 
       if (!res.ok) {
-        setError(body.error ?? 'সাবমিশন ব্যর্থ হয়েছে')
+        const fallback = locale === 'en' ? 'Submission failed' : 'সাবমিশন ব্যর্থ হয়েছে'
+        setError(body.error ?? fallback)
         setSubmitting(false)
         return
       }
@@ -175,7 +210,7 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
       router.refresh()
     } catch (err) {
       console.error(err)
-      setError(STRINGS.errors.serverError)
+      setError(strings.errors.serverError)
       setSubmitting(false)
     }
   }
@@ -185,20 +220,21 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
       {/* ── Identity (display only) ───────────────────────────────────────── */}
       <Card>
         <CardContent className="flex items-center justify-between gap-2 py-3 text-sm">
-          <span className="text-muted-foreground">{STRINGS.auth.signedInAs(displayName)}</span>
-          <Badge variant="secondary">{STRINGS.review.anonymityNote}</Badge>
+          <span className="text-muted-foreground">{strings.auth.signedInAs(displayName)}</span>
+          <Badge variant="secondary">{strings.review.anonymityNote}</Badge>
         </CardContent>
       </Card>
 
       {/* ── Professor + course ────────────────────────────────────────────── */}
-      <Section title="শিক্ষক ও কোর্স">
+      <Section title={locale === 'en' ? 'Professor & course' : 'শিক্ষক ও কোর্স'}>
         {preselectedProfessor ? (
           <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-            শিক্ষক: <span className="font-semibold">{preselectedProfessor.nameEn}</span>
+            {locale === 'en' ? 'Professor: ' : 'শিক্ষক: '}
+            <span className="font-semibold">{preselectedProfessor.nameEn}</span>
           </div>
         ) : (
           <>
-            <Field label={`${STRINGS.review.selectUniversity} *`}>
+            <Field label={`${strings.review.selectUniversity} *`}>
               <select
                 value={universityId}
                 onChange={(e) => {
@@ -209,7 +245,7 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
                 className={selectClass}
                 required
               >
-                <option value="">— বেছে নিন —</option>
+                <option value="">{locale === 'en' ? '— Pick one —' : '— বেছে নিন —'}</option>
                 {universities.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.shortName} — {u.nameEn}
@@ -218,7 +254,7 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
               </select>
             </Field>
 
-            <Field label={`${STRINGS.review.selectDepartment} *`}>
+            <Field label={`${strings.review.selectDepartment} *`}>
               <select
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : '')}
@@ -235,7 +271,7 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
               </select>
             </Field>
 
-            <Field label={`${STRINGS.review.teacherNameLabel} *`}>
+            <Field label={`${strings.review.teacherNameLabel} *`}>
               <input
                 type="text"
                 value={professorNameEn}
@@ -249,7 +285,7 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
-          <Field label={STRINGS.review.courseCodePlaceholder}>
+          <Field label={strings.review.courseCodePlaceholder}>
             <input
               type="text"
               value={courseCode}
@@ -258,7 +294,7 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
               className={inputClass}
             />
           </Field>
-          <Field label={`${STRINGS.review.courseNamePlaceholder} *`}>
+          <Field label={`${strings.review.courseNamePlaceholder} *`}>
             <input
               type="text"
               value={courseName}
@@ -280,26 +316,26 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
           })}
         </div>
 
-        <Field label={`${STRINGS.review.wouldRecommendLabel} *`}>
+        <Field label={`${strings.review.wouldRecommendLabel} *`}>
           <div className="flex gap-2">
             <RecommendButton
               active={wouldRecommend === true}
               onClick={() => setWouldRecommend(true)}
             >
-              {STRINGS.review.wouldRecommendYes}
+              {strings.review.wouldRecommendYes}
             </RecommendButton>
             <RecommendButton
               active={wouldRecommend === false}
               onClick={() => setWouldRecommend(false)}
             >
-              {STRINGS.review.wouldRecommendNo}
+              {strings.review.wouldRecommendNo}
             </RecommendButton>
           </div>
         </Field>
       </Section>
 
       {/* ── Tags ──────────────────────────────────────────────────────────── */}
-      <Section title={STRINGS.review.tagsLabel}>
+      <Section title={strings.review.tagsLabel}>
         <div className="flex flex-wrap gap-2">
           {(Object.keys(TAG_LABELS) as TagKey[]).map((key) => {
             const active = tags.includes(key)
@@ -323,17 +359,17 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
       </Section>
 
       {/* ── Optional text ─────────────────────────────────────────────────── */}
-      <Section title={STRINGS.review.reviewTextLabel}>
+      <Section title={strings.review.reviewTextLabel}>
         <textarea
           value={reviewText}
           onChange={(e) => setReviewText(e.target.value)}
           maxLength={500}
           rows={5}
-          placeholder={STRINGS.review.reviewTextPlaceholder}
+          placeholder={strings.review.reviewTextPlaceholder}
           className={inputClass + ' resize-none'}
         />
         <div className="mt-1 text-right text-xs text-muted-foreground">
-          {STRINGS.review.maxChars(reviewText.length, 500)}
+          {strings.review.maxChars(reviewText.length, 500)}
         </div>
       </Section>
 
@@ -357,7 +393,11 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
       ) : null}
 
       <Button type="submit" size="lg" disabled={submitting} className="w-full">
-        {submitting ? '...জমা দিচ্ছি' : STRINGS.review.submitButton}
+        {submitting
+          ? locale === 'en'
+            ? 'Submitting…'
+            : '...জমা দিচ্ছি'
+          : strings.review.submitButton}
       </Button>
     </form>
   )
