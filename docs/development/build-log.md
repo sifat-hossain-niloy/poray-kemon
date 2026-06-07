@@ -371,6 +371,82 @@ indexed. Skipping `page=1` follows the same convention.
 
 ---
 
+## Session 7 — June 2026 (`feat/admin-panel`)
+
+### What was built — operator tooling for moderation
+
+The admin panel is intentionally separate from the user-facing Google OAuth
+flow (SRS §4.5 FR-MOD-05: "no social login" for admin). Admins authenticate
+against `admin_users` with username + bcrypt password and receive an
+HMAC-SHA256 signed cookie (`pk_admin_session`, 8-hour TTL).
+
+### Why custom session signing (not NextAuth)
+
+NextAuth v5 is configured for end-user Google OAuth — its session is keyed
+on `googleId`, not on `admin_users.id`. Bolting admin auth into the same
+NextAuth instance would conflate two distinct identity systems. The custom
+HMAC-signed cookie:
+
+- Uses Web Crypto (works in BOTH edge runtime for middleware AND node
+  runtime for API routes — no separate impl needed)
+- Has no library dependency
+- Lives in its own cookie (`pk_admin_session`, `sameSite=strict`)
+- Is short-lived (8 hours) — admin sessions don't roam
+- Constant-time-ish via `subtle.verify()` (no manual byte comparison)
+
+### Routes
+
+| Route                                      | What                                                            |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| `GET /admin/login`                         | Login form (no chrome)                                          |
+| `POST /api/admin/login`                    | Verify bcrypt password; set cookie; 303 to `?from=` or `/admin` |
+| `POST /api/admin/logout`                   | Clear cookie; 303 to login                                      |
+| `GET /admin`                               | Dashboard: pending reports, soft-flagged, hidden, totals        |
+| `GET /admin/queue?filter=…`                | Reviews queue (soft_flagged / flagged_hidden / live)            |
+| `GET /admin/reports`                       | Pending reports queue, oldest first                             |
+| `PATCH /api/admin/reviews/[id]/moderation` | `{ action: 'approve'\|'hide'\|'delete' }`                       |
+| `POST /api/admin/reports/[id]/resolve`     | `{ action: 'keep'\|'remove' }`                                  |
+| `PATCH /api/admin/professors/[id]`         | status / designation / name updates                             |
+
+### Middleware (`middleware.ts`)
+
+Matches `/admin/:path*` and `/api/admin/:path*`, lets the two login endpoints
+through, verifies the signed cookie via `verifyAdminSessionToken`. UI routes
+without a session → 307 to `/admin/login?from=<intended path>`. API routes
+without a session → JSON 401. Open-redirect guarded: `?from` must start with
+`/admin` and not `//`.
+
+### Cache invalidation
+
+Every admin action that changes review visibility (`approve`, `hide`,
+`delete`, `resolve` with `remove`) invalidates `stats:site` AND the
+professor's profile cache so the public site doesn't keep serving the old
+state from Redis.
+
+### Verified
+
+- `pnpm typecheck` ✓, `pnpm lint` ✓, `pnpm test` ✓ (**55 tests**, +6 new)
+- Live smoke:
+  - Unauth `/admin` → 307 to `/admin/login`
+  - Unauth `/admin/queue` → 307 to `/admin/login?from=/admin/queue`
+  - Unauth `POST /api/admin/...` → 401 JSON
+  - `POST /api/admin/login` with seeded `admin`/`changeme123` → 303 + cookie set
+  - With cookie: `/admin`, `/admin/queue`, `/admin/reports` all 200
+
+### Decisions
+
+| Decision                                   | Reason                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| Custom HMAC cookie (not NextAuth)          | Admin is a distinct identity space; keeps the two systems decoupled            |
+| Web Crypto (not node:crypto)               | Same code runs in edge middleware AND node routes                              |
+| 8h TTL                                     | Admin sessions should be short — typical moderation pass is well under 8h      |
+| sameSite=strict on admin cookie            | Admin actions should never be CSRF-able from a non-admin tab                   |
+| `?from=` open-redirect guard               | Only allow `/admin/...` paths after login                                      |
+| Static `STRINGS.admin.*` in English        | Internal tooling; not user-facing                                              |
+| Delete = mark `status='deleted'`, keep row | The public transparency placeholder (SRS §4.9) needs the row to render against |
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
@@ -404,6 +480,12 @@ As features are completed, add them here for quick lookup.
 | Combined professor stats | `lib/professor-stats.ts` | Weighted by review_count across all courses (SRS Level 1) |
 | Full professor profile | `app/professors/[slug]/page.tsx` | Combined score card + per-course cards + 3-review preview + "see all" links |
 | Per-course reviews list | `app/professors/[slug]/[course-slug]/page.tsx` | Sort (helpful/recent), pagination (10/pg), batched vote state |
+| Admin auth | `lib/admin-auth.ts`, `middleware.ts` | Custom HMAC-SHA256 signed cookie (Web Crypto, edge+node) |
+| Admin login | `app/admin/login/page.tsx`, `app/api/admin/login/route.ts` | Bcrypt verify, 303 + cookie, open-redirect guarded |
+| Admin dashboard | `app/admin/page.tsx` | Pending reports / soft-flagged / hidden / totals |
+| Moderation queue | `app/admin/queue/page.tsx` + `AdminReviewActions` | Approve / hide / delete with confirmations |
+| Reports queue | `app/admin/reports/page.tsx` + `AdminReportActions` | Oldest-first; resolve keep / remove |
+| Admin moderation API | `app/api/admin/reviews/[id]/moderation/route.ts`, `app/api/admin/reports/[id]/resolve/route.ts`, `app/api/admin/professors/[id]/route.ts` | Zod-validated PATCH/POST, cache invalidation |
 
 ### Planned Features (from SRS)
 
@@ -417,7 +499,7 @@ As features are completed, add them here for quick lookup.
 | Review submission API            | P0       | ✅ Done (`feat/review-submission`)      |
 | Helpful voting                   | P0       | ✅ Done (`feat/helpful-voting`)         |
 | Report a review                  | P0       | ✅ Done (`feat/report-review`)          |
-| Admin panel                      | P0       | 🔲 Not started                          |
+| Admin panel                      | P0       | ✅ Done (`feat/admin-panel`)            |
 | Soft moderation (keyword filter) | P0       | ✅ Done (`feat/review-submission`)      |
 | Site-wide stats                  | P0       | ✅ Done (Session 2)                     |
 | About / privacy policy page      | P0       | 🔲 Not started                          |
