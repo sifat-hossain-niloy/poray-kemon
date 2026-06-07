@@ -22,10 +22,34 @@ main          ← production. Always deployable.
 
 **Rules:**
 
-- Never push directly to `main` — always open a PR
+- **Never commit directly to `main`** — always create a branch first
 - Feature branches must be merged within 3 days of creation (keep them short)
 - Branch names: `feat/`, `fix/`, `chore/`, `docs/`, `test/`
 - Delete branches after merging
+
+### Standard workflow per feature
+
+```bash
+# 1. Always start from a fresh main
+git checkout main
+git pull origin main
+
+# 2. Create a branch for the feature
+git checkout -b feat/<short-descriptive-name>
+
+# 3. Do the work. Commit using Conventional Commits.
+git add <files>
+git commit -m "feat(scope): short imperative summary"
+
+# 4. Push and open a PR when done
+git push -u origin feat/<short-descriptive-name>
+gh pr create --base main --fill
+
+# (If gh CLI isn't installed, the push output prints a PR-create URL.)
+```
+
+CI runs automatically on every push to `feat/**`, `fix/**`, `chore/**` and on
+PRs targeting `main` (see `.github/workflows/ci.yml`).
 
 ---
 
