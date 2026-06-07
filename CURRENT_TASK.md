@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Write path live — review submission API + form behind auth gate
-**Last updated:** June 2026 (Session 3)
-**Active branch:** `feat/review-submission` (PR open against main)
+**Phase:** Helpful voting live — first community-engagement primitive on top of the write path
+**Last updated:** June 2026 (Session 4)
+**Active branch:** `feat/helpful-voting` (PR open against main)
 
 ---
 
@@ -37,7 +37,7 @@
 - [x] `app/api/search/route.ts` JSON endpoint
 - [x] Replaced static form on homepage + navbar
 
-### Session 3 — write path (this branch)
+### Session 3 — write path (`feat/review-submission`, merged)
 
 - [x] `lib/slug.ts` — ASCII slug + collision-suffix helper
 - [x] `lib/moderation.ts` — two-tier keyword filter (hard block + soft flag)
@@ -47,6 +47,18 @@
 - [x] `app/review/new/page.tsx` + `components/review/ReviewForm.tsx`
 - [x] Unit tests: moderation (15), slug (12), aggregation (9) — **36 tests pass**
 - [x] Branch + PR workflow now in effect; `gh` CLI optional
+- [x] CI fix: pnpm version conflict (`fix/ci-pnpm-version-conflict`, merged)
+
+### Session 4 — helpful voting (this branch)
+
+- [x] `app/api/reviews/[id]/helpful/route.ts` — POST toggle + GET status,
+      transactional vote + counter, race-condition recovery via unique key
+- [x] `components/review/HelpfulButton.tsx` — optimistic UI with rollback;
+      unauthenticated click triggers Google OAuth via `signIn('google')`
+- [x] `components/review/ReviewCard.tsx` — server component with stars,
+      tags, recommend badge, date, helpful button; honours moderation status
+- [x] `app/professors/[slug]/page.tsx` switched to dynamic; top 3 reviews
+      per course rendered with per-viewer vote state in one DB round-trip
 
 ---
 
@@ -54,19 +66,13 @@
 
 After this PR is merged, the next steps from SRS are:
 
-### Step 1 — Helpful voting
-
-`app/api/reviews/[id]/helpful/route.ts` — toggle vote, requires auth.
-On INSERT/DELETE, update `reviews.helpful_count` (denormalised counter).
-New branch: `feat/helpful-voting`.
-
-### Step 2 — Report a review
+### Step 1 — Report a review
 
 `app/api/reports/route.ts` — public (no auth required).
 At 3 pending reports, trigger auto-hide: set `reviews.moderation_status = 'flagged_hidden'`.
 New branch: `feat/report-review`.
 
-### Step 3 — Full professor profile page
+### Step 2 — Full professor profile page
 
 Replace the current stub with:
 
@@ -77,12 +83,12 @@ Replace the current stub with:
 - Empty state when no reviews
   New branch: `feat/professor-profile-full`.
 
-### Step 4 — Admin panel
+### Step 3 — Admin panel
 
 `app/admin/*` — password login, moderation queue, edit/hide/delete actions, manual professor merging.
 New branch: `feat/admin-panel`.
 
-### Step 5 — Integration tests
+### Step 4 — Integration tests
 
 `__tests__/integration/reviews-submission.test.ts` — full API tests against the test DB (port 5435), including the anonymity transaction atomicity check.
 New branch: `test/integration-reviews-api`.
