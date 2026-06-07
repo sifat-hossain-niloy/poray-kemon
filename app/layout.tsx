@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from 'next'
 import { Hind_Siliguri, Geist_Mono } from 'next/font/google'
 import { SessionProvider } from 'next-auth/react'
+import { Navbar } from '@/components/layout/Navbar'
 import { STRINGS } from '@/lib/strings'
 import './globals.css'
+import { cn } from '@/lib/utils'
 
-// Hind Siliguri covers Bengali script natively
+// Hind Siliguri covers Bengali AND Latin natively — use it as --font-sans so
+// every shadcn component renders in Bangla without per-component overrides.
 const hindSiliguri = Hind_Siliguri({
-  variable: '--font-hind-siliguri',
+  variable: '--font-sans',
   subsets: ['bengali', 'latin'],
   weight: ['300', '400', '500', '600', '700'],
   display: 'swap',
@@ -63,9 +66,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="bn" className={`${hindSiliguri.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-background text-foreground">
-        <SessionProvider>{children}</SessionProvider>
+    <html lang="bn" className={cn('h-full antialiased', hindSiliguri.variable, geistMono.variable)}>
+      <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
+        <SessionProvider>
+          <Navbar />
+          <div className="flex flex-1 flex-col">{children}</div>
+        </SessionProvider>
       </body>
     </html>
   )

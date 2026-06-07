@@ -61,7 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
     async jwt({ token, profile }) {
       // Store Google sub in JWT for the session callback above
-      if (profile) {
+      if (profile?.sub) {
         token.sub = profile.sub
       }
       return token
