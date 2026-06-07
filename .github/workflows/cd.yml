@@ -1,0 +1,75 @@
+name: CD — Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+# Only one deploy runs at a time
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    # Only deploy after CI passes
+    needs: []
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Option A: Vercel deployment ──────────────────────────────────────
+      # Uncomment when deploying to Vercel:
+      #
+      # - name: Deploy to Vercel
+      #   uses: amondnet/vercel-action@v25
+      #   with:
+      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
+      #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+      #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+      #     vercel-args: '--prod'
+
+      # ── Option B: Docker deploy to VPS ───────────────────────────────────
+      # Uncomment when deploying to a VPS with Docker:
+      #
+      # - name: Build Docker image
+      #   run: |
+      #     docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+      #     docker tag ghcr.io/${{ github.repository }}:${{ github.sha }} \
+      #       ghcr.io/${{ github.repository }}:latest
+      #
+      # - name: Push to GitHub Container Registry
+      #   run: |
+      #     echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      #     docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+      #     docker push ghcr.io/${{ github.repository }}:latest
+      #
+      # - name: Deploy to VPS via SSH
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host: ${{ secrets.SERVER_HOST }}
+      #     username: ${{ secrets.SERVER_USER }}
+      #     key: ${{ secrets.SSH_PRIVATE_KEY }}
+      #     script: |
+      #       cd /opt/poraykemon
+      #       git pull origin main
+      #       docker compose -f docker-compose.prod.yml pull nextjs
+      #       docker compose -f docker-compose.prod.yml up -d nextjs
+      #       docker compose -f docker-compose.prod.yml exec nextjs pnpm db:migrate:prod
+
+      - name: Deployment placeholder
+        run: echo "Configure Option A (Vercel) or Option B (Docker VPS) above"
