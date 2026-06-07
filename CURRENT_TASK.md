@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Professor profile complete — combined score + per-course full reviews list with sort & pagination
-**Last updated:** June 2026 (Session 6)
-**Active branch:** `feat/professor-profile-full` (PR open against main)
+**Phase:** Admin panel live — login, dashboard, moderation queue, reports queue
+**Last updated:** June 2026 (Session 7)
+**Active branch:** `feat/admin-panel` (PR open against main)
 
 ---
 
@@ -72,18 +72,30 @@
 - [x] ReviewCard footer extended with the report button
 - [x] Unit tests for the threshold + dedup-key helpers (8 cases) — 44 total
 
-### Session 6 — full professor profile (this branch)
+### Session 6 — full professor profile (`feat/professor-profile-full`, merged)
 
-- [x] `lib/professor-stats.ts` — pure helper for combined weighted score
-      across all courses (weights = review_count); 5 unit tests covering
-      empty / zero-review / weighted / null-safety edges
-- [x] `app/professors/[slug]/page.tsx` — added Level-1 combined-score card
-      (SRS §4.6 FR-STAT-02): big overall score, recommend %, all 4 dims;
-      each course card gets a "সব রিভিউ দেখুন →" link when count > 3
-- [x] `app/professors/[slug]/[course-slug]/page.tsx` — new page with:
-      breadcrumb, per-course aggregate header, helpful/recent sort tabs,
-      10-per-page pagination, batched per-viewer vote lookup, empty state
-- [x] **49 unit tests pass** (+5 new)
+- [x] `lib/professor-stats.ts` — combined weighted score helper
+- [x] `app/professors/[slug]/page.tsx` — Level-1 combined-score card
+- [x] `app/professors/[slug]/[course-slug]/page.tsx` — full reviews list with
+      sort tabs + pagination
+
+### Session 7 — admin panel (this branch)
+
+- [x] `lib/admin-auth.ts` — Web Crypto HMAC-SHA256 signed cookie (edge + node)
+- [x] `middleware.ts` — gates `/admin/*` and `/api/admin/*` (except login)
+- [x] `app/admin/login/page.tsx` + `app/api/admin/login/route.ts` — bcrypt
+      password check against `admin_users`, sets `pk_admin_session` cookie
+- [x] `app/admin/page.tsx` — dashboard with 6 live counts
+- [x] `app/admin/queue/page.tsx` — moderation queue with filter tabs
+      (soft_flagged / flagged_hidden / live), review actions:
+      approve / hide / delete
+- [x] `app/admin/reports/page.tsx` — pending reports queue with reviewer
+      content + reporter note, resolve as keep / remove
+- [x] Action APIs: PATCH `/api/admin/reviews/[id]/moderation`,
+      POST `/api/admin/reports/[id]/resolve`, PATCH `/api/admin/professors/[id]`
+- [x] Cache invalidation on every state change (stats:site + prof:{slug})
+- [x] 6 unit tests for HMAC signing (round-trip, tampered payload, tampered
+      signature, wrong secret, expired, malformed) — **55 tests total**
 
 ---
 
@@ -91,15 +103,20 @@
 
 After this PR is merged, the next steps from SRS are:
 
-### Step 1 — Admin panel
-
-`app/admin/*` — password login, moderation queue, edit/hide/delete actions, manual professor merging.
-New branch: `feat/admin-panel`.
-
-### Step 2 — Integration tests
+### Step 1 — Integration tests
 
 `__tests__/integration/reviews-submission.test.ts` — full API tests against the test DB (port 5435), including the anonymity transaction atomicity check.
 New branch: `test/integration-reviews-api`.
+
+### Step 2 — About / privacy policy page
+
+Static content; explains the anonymity contract for end-users.
+New branch: `feat/about-page`.
+
+### Step 3 — Admin: add/edit universities + departments
+
+Currently universities/departments live only in seed. Add CRUD pages.
+New branch: `feat/admin-universities`.
 
 ---
 
