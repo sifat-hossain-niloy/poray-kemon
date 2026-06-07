@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { SearchBox } from '@/components/search/SearchBox'
 import { STRINGS } from '@/lib/strings'
 
 export function Navbar() {
@@ -28,32 +29,10 @@ export function Navbar() {
           <span className="hidden sm:inline">{STRINGS.site.name}</span>
         </Link>
 
-        {/* Inline search */}
-        <form action="/search" method="GET" className="flex-1 max-w-md">
-          <div className="relative">
-            <svg
-              aria-hidden="true"
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-              />
-            </svg>
-            <input
-              type="search"
-              name="q"
-              placeholder={STRINGS.site.searchPlaceholder}
-              className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-3 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-        </form>
+        {/* Live debounced search */}
+        <div className="flex-1 max-w-md">
+          <SearchBox variant="compact" />
+        </div>
 
         {/* Auth */}
         <div className="flex items-center gap-2 shrink-0">

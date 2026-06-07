@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Next.js dev (Turbopack)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "Prisma Studio",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["db:studio"],
+      "port": 5555
+    }
+  ]
+}

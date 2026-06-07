@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { getCache, setCache, CACHE_KEYS, CACHE_TTL } from '@/lib/redis'
 import { STRINGS } from '@/lib/strings'
+import { SearchBox } from '@/components/search/SearchBox'
 import Link from 'next/link'
 
 // ── Site stats fetched once per minute via Redis ──────────────────────────────
@@ -43,35 +44,8 @@ export default async function HomePage() {
             <p className="text-lg text-muted-foreground leading-relaxed">{STRINGS.site.tagline}</p>
           </div>
 
-          {/* Search bar — client interaction handled in SearchBox component (next step) */}
-          <div className="relative w-full">
-            <form action="/search" method="GET">
-              <div className="relative">
-                <svg
-                  className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-                  />
-                </svg>
-                <input
-                  type="search"
-                  name="q"
-                  placeholder={STRINGS.site.searchPlaceholder}
-                  className="w-full rounded-2xl border border-border bg-card px-5 py-4 pl-12 text-base shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  autoFocus
-                />
-              </div>
-            </form>
-          </div>
+          {/* Live debounced search — results appear as you type */}
+          <SearchBox variant="hero" autoFocus />
 
           {/* Site stats */}
           <div className="grid grid-cols-3 gap-4 pt-4">
