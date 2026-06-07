@@ -134,6 +134,62 @@ The query:
 
 ---
 
+## Session 3 — June 2026 (`feat/review-submission`)
+
+### What was built — the write path goes live
+
+The anonymity contract is now exercised end-to-end. A review submission round-trips through:
+
+1. Google session check (`auth()` from `lib/auth.ts`) — 401 if missing
+2. Zod validation (`reviewSubmitSchema` in `lib/validations/review.ts`)
+3. Honeypot guard
+4. Keyword moderation (`lib/moderation.ts`) — hard-block returns 400, soft-flag still writes but with `moderation_status = 'soft_flagged'`
+5. Find-or-create `Professor`, `Course`, `ProfessorCourse`
+6. **Inside `prisma.$transaction`:**
+   - Duplicate guard via `review_submissions` unique key
+   - `INSERT reviews` with **NO `user_id`**
+   - `INSERT review_submissions` with `(user_id, professor_course_id)`
+   - `$executeRaw` UPDATE running averages on `professor_courses`
+7. `deleteCache` on `stats:site` + `prof:{slug}`
+8. 201 with `{ message, professor_slug, moderation_status }`
+
+### Why the running-average is raw SQL
+
+Prisma's typed query builder can't express the self-referencing
+`((avg * count) + new) / (count + 1)` arithmetic atomically. So inside the
+transaction we call `tx.$executeRaw\`UPDATE professor_courses SET ...\``.
+`lib/aggregation.ts` exports the same maths in TS so the formula is
+unit-tested in isolation (`**tests**/unit/aggregation.test.ts`).
+
+### Why moderation lives in code (not in the DB)
+
+Word lists are short, conservative, and bilingual. Keeping them in
+`lib/moderation.ts` lets the keyword filter run **before** any DB write,
+and lets us unit-test each branch (15 cases in
+`__tests__/unit/moderation.test.ts`). A future migration can move them to
+a `blocklist` table for admin editing.
+
+### Test coverage added
+
+- `moderation.test.ts` (15 cases): every hard-block category, every soft-flag pattern, plus precedence (hard beats soft)
+- `slug.test.ts` (12 cases): ASCII normalisation, Bangla stripping, collision suffix logic
+- `aggregation.test.ts` (9 cases): running average matches naive average over 10 inserts; recommendation %; weighted score
+
+### UI
+
+- `app/review/new/page.tsx` — RSC shell. Loads universities + departments + (optional) preselected professor in one round-trip. If the user is not authenticated, renders a `Sign in with Google` server-action button instead of the form.
+- `components/review/ReviewForm.tsx` — client form with university → department cascade, find-or-create professor input (or preselected when arriving from a professor page via `?professor=<slug>`), 4 ratings, would-recommend, multi-select tag chips, optional 0–500 char text, honeypot field.
+
+### Verified
+
+- `pnpm typecheck` ✓
+- `pnpm lint` ✓
+- `pnpm test` ✓ (36 tests pass)
+- Live smoke test: `POST /api/reviews` without session returns 401 with Bangla error
+- `/review/new` returns 200 (auth gate page renders)
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
@@ -153,15 +209,21 @@ As features are completed, add them here for quick lookup.
 | University detail page | `app/universities/[slug]/page.tsx`| ISR 5 min, lists departments |
 | Professor profile (stub) | `app/professors/[slug]/page.tsx` | ISR 1 min, per-course score cards |
 | Cross-entity search | `lib/search.ts`, `app/search/page.tsx` | pg_trgm fuzzy + ILIKE, UNION ALL |
+| Live debounced search | `components/search/SearchBox.tsx`, `app/api/search/route.ts` | 200 ms debounce + dropdown |
 | Navbar | `components/layout/Navbar.tsx` | Sticky header, inline search, auth dropdown |
 | Health endpoint | `app/api/health/route.ts` | DB + Redis probes; returns 503 if either down |
+| Slug helpers | `lib/slug.ts` | ASCII-safe slugs with collision suffixes |
+| Moderation (2-tier) | `lib/moderation.ts` | Hard block (profanity/slurs/accusations) + soft flag (caps, length, grudge) |
+| Running averages | `lib/aggregation.ts` | O(1) per-insert formula, raw-SQL equivalent in API |
+| Review submission API | `app/api/reviews/route.ts` | The anonymity transaction: reviews INSERT with NO user_id, paired with review_submissions INSERT, plus running-avg UPDATE — all atomic |
+| Review form page | `app/review/new/page.tsx`, `components/review/ReviewForm.tsx` | Auth-gated, find-or-create professor, 4 ratings + tags + optional text + honeypot |
 
 ### Planned Features (from SRS)
 
 | Feature                          | Priority | Status                                   |
 | -------------------------------- | -------- | ---------------------------------------- |
 | Professor profile page (full)    | P0       | 🟡 Stub only — needs reviews list & sort |
-| Review submission form           | P0       | 🔲 Not started                           |
+| Review submission form           | P0       | ✅ Done (`feat/review-submission`)       |
 | University directory             | P0       | 🔲 Not started                           |
 | Department pages                 | P0       | 🔲 Not started                           |
 | Search API                       | P0       | 🔲 Not started                           |
