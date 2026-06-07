@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Admin panel live — login, dashboard, moderation queue, reports queue
-**Last updated:** June 2026 (Session 7)
-**Active branch:** `feat/admin-panel` (PR open against main)
+**Phase:** Integration test suite live — 25 DB-backed API tests covering anonymity, voting, reports
+**Last updated:** June 2026 (Session 8)
+**Active branch:** `test/integration-suite` (PR open against main)
 
 ---
 
@@ -79,7 +79,7 @@
 - [x] `app/professors/[slug]/[course-slug]/page.tsx` — full reviews list with
       sort tabs + pagination
 
-### Session 7 — admin panel (this branch)
+### Session 7 — admin panel (`feat/admin-panel`, merged)
 
 - [x] `lib/admin-auth.ts` — Web Crypto HMAC-SHA256 signed cookie (edge + node)
 - [x] `middleware.ts` — gates `/admin/*` and `/api/admin/*` (except login)
@@ -95,7 +95,29 @@
       POST `/api/admin/reports/[id]/resolve`, PATCH `/api/admin/professors/[id]`
 - [x] Cache invalidation on every state change (stats:site + prof:{slug})
 - [x] 6 unit tests for HMAC signing (round-trip, tampered payload, tampered
-      signature, wrong secret, expired, malformed) — **55 tests total**
+      signature, wrong secret, expired, malformed) — 55 tests total
+
+### Session 8 — integration test suite (this branch)
+
+- [x] `test/global-setup.integration.ts` — loads `.env.local` (in-house parser,
+      no `dotenv` dep), pins `DATABASE_URL` to the test DB, runs
+      `prisma migrate deploy`, enables `pg_trgm` on the test DB
+- [x] `test/setup.integration.ts` — mocks `@/lib/redis` with an in-memory
+      store (full NX semantics) and `@/lib/auth` (per-test session injection)
+- [x] `test/integration-helpers.ts` — `cleanDb()` (TRUNCATE w/ CASCADE),
+      `seedMinimal()` (1 uni + 1 dept + 3 users), `mockSession()`,
+      `mockUnauthenticated()`, `jsonPost()`
+- [x] `__tests__/integration/reviews-api.test.ts` — 10 tests:
+      auth gate, happy path, **schema-level anonymity check**, duplicate
+      guard, two-user weighted average, honeypot, hard-block, soft-flag,
+      bad rating, missing identifiers
+- [x] `__tests__/integration/helpful-voting.test.ts` — 8 tests:
+      GET state, GET 404, POST 401, toggle ON, toggle OFF, cross-user
+      aggregation, missing review, invalid id
+- [x] `__tests__/integration/reports.test.ts` — 7 tests:
+      401, 400 invalid reason, 404 missing review, INSERT + Redis dedup
+      key, idempotent dup, 2 reports = no auto-hide, 3 reports = auto-hide
+- [x] All 25 integration tests + 55 unit tests = **80 tests pass** in ~5s
 
 ---
 
@@ -103,17 +125,12 @@
 
 After this PR is merged, the next steps from SRS are:
 
-### Step 1 — Integration tests
-
-`__tests__/integration/reviews-submission.test.ts` — full API tests against the test DB (port 5435), including the anonymity transaction atomicity check.
-New branch: `test/integration-reviews-api`.
-
-### Step 2 — About / privacy policy page
+### Step 1 — About / privacy policy page
 
 Static content; explains the anonymity contract for end-users.
 New branch: `feat/about-page`.
 
-### Step 3 — Admin: add/edit universities + departments
+### Step 2 — Admin: add/edit universities + departments
 
 Currently universities/departments live only in seed. Add CRUD pages.
 New branch: `feat/admin-universities`.

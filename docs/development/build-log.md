@@ -447,6 +447,76 @@ state from Redis.
 
 ---
 
+## Session 8 — June 2026 (`test/integration-suite`)
+
+### What was built — 25 DB-backed integration tests
+
+The unit suite covers pure logic (slug, moderation, aggregation, etc.).
+The integration suite covers the routes that the unit suite can't — DB
+transactions, find-or-create flows, the anonymity contract at the
+schema level, and the Redis dedup mechanism.
+
+### Architecture
+
+- **`test/global-setup.integration.ts`** runs once before any worker boots.
+  Loads `.env.local` (tiny in-house parser so we don't add `dotenv` as a
+  dep), pins `DATABASE_URL` to `DATABASE_URL_TEST`, then `prisma migrate
+deploy` and `CREATE EXTENSION IF NOT EXISTS pg_trgm` against the test DB.
+- **`test/setup.integration.ts`** mocks `@/lib/redis` with an in-memory
+  store (full NX semantics + TTL emulation) and `@/lib/auth` so each test
+  can inject a session via `mockSession(userId)`.
+- **`test/integration-helpers.ts`** exposes `cleanDb()` (TRUNCATE w/
+  RESTART IDENTITY CASCADE in dependency order), `seedMinimal()`
+  (1 uni + 1 dept + 3 users), and `jsonPost()`.
+- Vitest runs in a single fork (`singleFork: true`) so the Postgres test
+  DB is serialised — much simpler than per-test schemas.
+
+### Suite layout
+
+`__tests__/integration/reviews-api.test.ts` — POST /api/reviews
+
+- Auth 401, happy path
+- **Schema-level anonymity check**: `information_schema.columns` confirms
+  the `reviews` table has no `user_id` column and no review-submission FK
+- Duplicate-submission 409
+- Two-user weighted average (5 + 3 → 4.0)
+- Honeypot 400
+- Hard-block on profanity (no DB write)
+- Soft-flag on ALL CAPS (DB write with `moderation_status = 'soft_flagged'`)
+- Out-of-range rating, missing identifier set
+
+`__tests__/integration/helpful-voting.test.ts` — POST/GET /api/reviews/[id]/helpful
+
+- GET state read (unauth + 404), 401 POST, toggle on/off, cross-user
+  aggregation, missing review, invalid id
+
+`__tests__/integration/reports.test.ts` — POST /api/reports
+
+- 401, invalid reason 400, 404 missing review
+- INSERT + Redis dedup-key sanity check (introspects `__redisStore`)
+- Idempotent duplicate from same user
+- 2 distinct users → still live
+- 3 distinct users → `moderation_status = 'flagged_hidden'`, response
+  carries `auto_hidden: true, threshold: 3`
+
+### Numbers
+
+- 25 integration tests pass in ~5s
+- 80 tests total (55 unit + 25 integration)
+- All routes exercised against real Postgres (test DB, port 5435 locally)
+
+### Decisions
+
+| Decision                           | Reason                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Mock Redis, real Postgres          | The point of integration tests is the DB layer; ioredis is the boundary, not the unit under test |
+| `singleFork: true`                 | One Postgres DB shared across tests; avoid race conditions                                       |
+| `cleanDb()` per-test, not per-file | Fast (~50ms) and keeps tests independent                                                         |
+| In-house env parser                | Skip `dotenv` package install for one ~20-line function                                          |
+| Schema-level anonymity check       | Catches accidental migrations that re-introduce `user_id` on reviews                             |
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
@@ -486,6 +556,7 @@ As features are completed, add them here for quick lookup.
 | Moderation queue | `app/admin/queue/page.tsx` + `AdminReviewActions` | Approve / hide / delete with confirmations |
 | Reports queue | `app/admin/reports/page.tsx` + `AdminReportActions` | Oldest-first; resolve keep / remove |
 | Admin moderation API | `app/api/admin/reviews/[id]/moderation/route.ts`, `app/api/admin/reports/[id]/resolve/route.ts`, `app/api/admin/professors/[id]/route.ts` | Zod-validated PATCH/POST, cache invalidation |
+| Integration test suite | `test/global-setup.integration.ts`, `test/setup.integration.ts`, `test/integration-helpers.ts`, `__tests__/integration/*.test.ts` | 25 DB-backed tests against the test Postgres; mocks Redis + NextAuth |
 
 ### Planned Features (from SRS)
 
