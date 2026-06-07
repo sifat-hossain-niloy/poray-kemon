@@ -190,6 +190,62 @@ a `blocklist` table for admin editing.
 
 ---
 
+## Session 4 — June 2026 (`feat/helpful-voting`)
+
+### What was built — community signal on top of reviews
+
+A logged-in viewer can mark any review as helpful, see the count update,
+and click again to remove the vote. The button is rendered inside every
+`ReviewCard`; the professor profile now previews up to three reviews per
+course so the button has somewhere to live.
+
+### API design (`app/api/reviews/[id]/helpful/route.ts`)
+
+`POST /api/reviews/:id/helpful`
+
+1. Auth check → 401 if missing
+2. Validate review id (positive integer) and existence → 404 if not
+3. Inside `prisma.$transaction`:
+   - Read `helpful_votes` for `(userId, reviewId)`
+   - If found: DELETE the row, `decrement: 1` on `reviews.helpful_count`
+   - If missing: CREATE the row, `increment: 1` on `reviews.helpful_count`
+4. Return `{ voted, helpful_count }` so the client renders without a refetch
+
+Race-condition guard: two concurrent POSTs from the same user can both
+hit the "no vote" branch and race to INSERT. The unique constraint
+`(user_id, review_id)` catches the loser; we map `P2002` to a 200 with
+the current counter rather than 500.
+
+`GET /api/reviews/:id/helpful` returns the same `{ voted, helpful_count }`
+shape — useful if the client wants to revalidate without optimistic state.
+
+### Client (`HelpfulButton.tsx`)
+
+- Optimistic toggle on click — count + vote state update before the
+  network round-trip; rolls back on failure
+- Unauthenticated click renders an inline `সাইন ইন` prompt that runs
+  `signIn('google')` directly (no full-page navigation)
+- `aria-pressed` reflects vote state for screen readers
+- All button labels via `STRINGS.reviewDisplay.*` — no inline Bangla
+
+### Professor profile change
+
+Switched from ISR (60 s) to `dynamic = 'force-dynamic'` because per-viewer
+vote state can't live in a shared cache. For each course, fetches top 3
+visible reviews ordered by `helpfulCount DESC, submittedAt DESC`, then
+runs ONE `helpful_votes.findMany({ where: { userId, reviewId: {in: [...]} } })`
+to collect the viewer's votes across the whole page. No N+1.
+
+### Verified
+
+- `pnpm typecheck` ✓, `pnpm lint` ✓, `pnpm test` ✓ (36 tests still pass)
+- Live smoke test:
+  - `POST /api/reviews/1/helpful` (no session) → 401 with Bangla error
+  - `POST /api/reviews/abc/helpful` → 400 "Invalid review id"
+  - `GET /api/reviews/1/helpful` (no review) → 404
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
@@ -217,20 +273,22 @@ As features are completed, add them here for quick lookup.
 | Running averages | `lib/aggregation.ts` | O(1) per-insert formula, raw-SQL equivalent in API |
 | Review submission API | `app/api/reviews/route.ts` | The anonymity transaction: reviews INSERT with NO user_id, paired with review_submissions INSERT, plus running-avg UPDATE — all atomic |
 | Review form page | `app/review/new/page.tsx`, `components/review/ReviewForm.tsx` | Auth-gated, find-or-create professor, 4 ratings + tags + optional text + honeypot |
+| Helpful voting API | `app/api/reviews/[id]/helpful/route.ts` | POST toggle + GET status; transactional vote+counter; race-safe |
+| Review card + helpful button | `components/review/ReviewCard.tsx`, `components/review/HelpfulButton.tsx` | Server card + client button with optimistic UI and sign-in fallback |
 
 ### Planned Features (from SRS)
 
-| Feature                          | Priority | Status                                   |
-| -------------------------------- | -------- | ---------------------------------------- |
-| Professor profile page (full)    | P0       | 🟡 Stub only — needs reviews list & sort |
-| Review submission form           | P0       | ✅ Done (`feat/review-submission`)       |
-| University directory             | P0       | 🔲 Not started                           |
-| Department pages                 | P0       | 🔲 Not started                           |
-| Search API                       | P0       | 🔲 Not started                           |
-| Review submission API            | P0       | 🔲 Not started                           |
-| Helpful voting                   | P0       | 🔲 Not started                           |
-| Report a review                  | P0       | 🔲 Not started                           |
-| Admin panel                      | P0       | 🔲 Not started                           |
-| Soft moderation (keyword filter) | P0       | 🔲 Not started                           |
-| Site-wide stats                  | P0       | 🔲 Not started                           |
-| About / privacy policy page      | P0       | 🔲 Not started                           |
+| Feature                          | Priority | Status                                                          |
+| -------------------------------- | -------- | --------------------------------------------------------------- |
+| Professor profile page (full)    | P0       | 🟡 Stub with 3-review preview — full sort/pagination still TODO |
+| Review submission form           | P0       | ✅ Done (`feat/review-submission`)                              |
+| University directory             | P0       | ✅ Done (Session 2)                                             |
+| Department pages                 | P0       | ✅ Done (Session 2)                                             |
+| Search API                       | P0       | ✅ Done (Session 2/2.5)                                         |
+| Review submission API            | P0       | ✅ Done (`feat/review-submission`)                              |
+| Helpful voting                   | P0       | ✅ Done (`feat/helpful-voting`)                                 |
+| Report a review                  | P0       | 🔲 Not started                                                  |
+| Admin panel                      | P0       | 🔲 Not started                                                  |
+| Soft moderation (keyword filter) | P0       | ✅ Done (`feat/review-submission`)                              |
+| Site-wide stats                  | P0       | ✅ Done (Session 2)                                             |
+| About / privacy policy page      | P0       | 🔲 Not started                                                  |

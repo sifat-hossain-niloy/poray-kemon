@@ -1,17 +1,25 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
+import { auth } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ReviewCard } from '@/components/review/ReviewCard'
 import { STRINGS } from '@/lib/strings'
 import Link from 'next/link'
 
-export const revalidate = 60
+// Dynamic now: we need the authenticated user's per-review vote state.
+// ISR + per-user state in the SAME render is impossible without a client
+// fetch — the dynamic render keeps the page authoritative for both signed-in
+// and signed-out viewers.
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ slug: string }>
 }
+
+const REVIEWS_PER_COURSE_PREVIEW = 3
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
@@ -28,6 +36,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProfessorPage({ params }: PageProps) {
   const { slug } = await params
+  const session = await auth()
+  const viewerId = session?.user?.id ?? null
 
   const professor = await db.professor.findUnique({
     where: { slug },
@@ -36,16 +46,35 @@ export default async function ProfessorPage({ params }: PageProps) {
       department: true,
       professorCourses: {
         orderBy: { reviewCount: 'desc' },
-        include: { course: true },
+        include: {
+          course: true,
+          reviews: {
+            where: { status: 'visible' },
+            orderBy: [{ helpfulCount: 'desc' }, { submittedAt: 'desc' }],
+            take: REVIEWS_PER_COURSE_PREVIEW,
+          },
+        },
       },
     },
   })
 
   if (!professor) notFound()
 
+  // Fetch the viewer's votes across ALL visible reviews on this page in one
+  // round-trip. Index lookup is cheap; this beats N+1 client requests.
+  const allReviewIds = professor.professorCourses.flatMap((pc) => pc.reviews.map((r) => r.id))
+  const votedIds = new Set<number>()
+  if (viewerId && allReviewIds.length > 0) {
+    const votes = await db.helpfulVote.findMany({
+      where: { userId: viewerId, reviewId: { in: allReviewIds } },
+      select: { reviewId: true },
+    })
+    votes.forEach((v) => votedIds.add(v.reviewId))
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
-      {/* Header */}
+      {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="mb-8">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
           <Link href="/universities" className="text-muted-foreground hover:text-foreground">
@@ -85,7 +114,7 @@ export default async function ProfessorPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Courses */}
+      {/* ── Courses + recent reviews ─────────────────────────────────────── */}
       <section>
         <h2 className="mb-4 text-xl font-semibold">কোর্সসমূহ</h2>
 
@@ -96,22 +125,56 @@ export default async function ProfessorPage({ params }: PageProps) {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-6">
             {professor.professorCourses.map((pc) => (
-              <Card key={pc.id}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">
-                    {pc.course.courseCode ? `${pc.course.courseCode} — ` : ''}
-                    {pc.course.courseName}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                  <Stat label={STRINGS.ratings.teachingQuality} value={pc.avgTeachingQuality} />
-                  <Stat label={STRINGS.ratings.gradingFairness} value={pc.avgGradingFairness} />
-                  <Stat label={STRINGS.ratings.courseDifficulty} value={pc.avgCourseDifficulty} />
-                  <Stat label={STRINGS.ratings.attendance} value={pc.avgAttendance} />
-                </CardContent>
-              </Card>
+              <div key={pc.id} className="space-y-3">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <CardTitle className="text-base">
+                        {pc.course.courseCode ? `${pc.course.courseCode} — ` : ''}
+                        {pc.course.courseName}
+                      </CardTitle>
+                      <span className="text-xs text-muted-foreground">
+                        {STRINGS.professor.reviewCount(pc.reviewCount)}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                    <Stat label={STRINGS.ratings.teachingQuality} value={pc.avgTeachingQuality} />
+                    <Stat label={STRINGS.ratings.gradingFairness} value={pc.avgGradingFairness} />
+                    <Stat label={STRINGS.ratings.courseDifficulty} value={pc.avgCourseDifficulty} />
+                    <Stat label={STRINGS.ratings.attendance} value={pc.avgAttendance} />
+                  </CardContent>
+                </Card>
+
+                {pc.reviews.length > 0 ? (
+                  <div className="ml-2 space-y-2 border-l-2 border-border pl-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {STRINGS.reviewDisplay.sortByHelpful}
+                    </h3>
+                    {pc.reviews.map((r) => (
+                      <ReviewCard
+                        key={r.id}
+                        review={{
+                          id: r.id,
+                          teachingQuality: r.teachingQuality,
+                          gradingFairness: r.gradingFairness,
+                          courseDifficulty: r.courseDifficulty,
+                          attendanceStrictness: r.attendanceStrictness,
+                          wouldRecommend: r.wouldRecommend,
+                          reviewText: r.reviewText,
+                          tags: r.tags,
+                          helpfulCount: r.helpfulCount,
+                          submittedAt: r.submittedAt,
+                          moderationStatus: r.moderationStatus,
+                        }}
+                        userVoted={votedIds.has(r.id)}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
         )}
