@@ -2,12 +2,13 @@ import type { Metadata, Viewport } from 'next'
 import { Hind_Siliguri, Geist_Mono } from 'next/font/google'
 import { SessionProvider } from 'next-auth/react'
 import { Navbar } from '@/components/layout/Navbar'
-import { STRINGS } from '@/lib/strings'
+import { LocaleProvider } from '@/lib/i18n/client'
+import { getLocale, getStrings } from '@/lib/i18n'
 import './globals.css'
 import { cn } from '@/lib/utils'
 
 // Hind Siliguri covers Bengali AND Latin natively — use it as --font-sans so
-// every shadcn component renders in Bangla without per-component overrides.
+// every shadcn component renders cleanly in either locale.
 const hindSiliguri = Hind_Siliguri({
   variable: '--font-sans',
   subsets: ['bengali', 'latin'],
@@ -23,36 +24,36 @@ const geistMono = Geist_Mono({
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://poraykemon.com'
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-  title: {
-    default: `${STRINGS.site.name} — পড়ায় কেমন`,
-    template: `%s | ${STRINGS.site.name}`,
-  },
-  description: STRINGS.site.tagline,
-  keywords: [
-    'professor rating',
-    'bangladesh university',
-    'শিক্ষক রেটিং',
-    'বিশ্ববিদ্যালয়',
-    'BUET',
-    'DU',
-    'NSU',
-    'BRAC',
-  ],
-  authors: [{ name: 'Poray Kemon' }],
-  openGraph: {
-    siteName: STRINGS.site.name,
-    locale: 'bn_BD',
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
+// Metadata is resolved at request time too — pick the active locale's bundle.
+export async function generateMetadata(): Promise<Metadata> {
+  const strings = await getStrings()
+  const locale = await getLocale()
+  return {
+    metadataBase: new URL(siteUrl),
+    title: {
+      default: `${strings.site.name} — পড়ায় কেমন`,
+      template: `%s | ${strings.site.name}`,
+    },
+    description: strings.site.tagline,
+    keywords: [
+      'professor rating',
+      'bangladesh university',
+      'শিক্ষক রেটিং',
+      'বিশ্ববিদ্যালয়',
+      'BUET',
+      'DU',
+      'NSU',
+      'BRAC',
+    ],
+    authors: [{ name: 'Poray Kemon' }],
+    openGraph: {
+      siteName: strings.site.name,
+      locale: locale === 'en' ? 'en_US' : 'bn_BD',
+      type: 'website',
+    },
+    twitter: { card: 'summary_large_image' },
+    robots: { index: true, follow: true },
+  }
 }
 
 export const viewport: Viewport = {
@@ -60,17 +61,24 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const locale = await getLocale()
+
   return (
-    <html lang="bn" className={cn('h-full antialiased', hindSiliguri.variable, geistMono.variable)}>
+    <html
+      lang={locale}
+      className={cn('h-full antialiased', hindSiliguri.variable, geistMono.variable)}
+    >
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
         <SessionProvider>
-          <Navbar />
-          <div className="flex flex-1 flex-col">{children}</div>
+          <LocaleProvider locale={locale}>
+            <Navbar />
+            <div className="flex flex-1 flex-col">{children}</div>
+          </LocaleProvider>
         </SessionProvider>
       </body>
     </html>
