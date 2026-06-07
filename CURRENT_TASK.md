@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Integration test suite live — 25 DB-backed API tests covering anonymity, voting, reports
-**Last updated:** June 2026 (Session 8)
-**Active branch:** `test/integration-suite` (PR open against main)
+**Phase:** Language toggle live (bn ↔ en) + auth fix for /review/new
+**Last updated:** June 2026 (Session 9)
+**Active branches:** `fix/auth-google-sub` and `feat/i18n-toggle` (both PRs open)
 
 ---
 
@@ -118,6 +118,30 @@
       401, 400 invalid reason, 404 missing review, INSERT + Redis dedup
       key, idempotent dup, 2 reports = no auto-hide, 3 reports = auto-hide
 - [x] All 25 integration tests + 55 unit tests = **80 tests pass** in ~5s
+
+### Session 9 — auth fix + i18n toggle (two PRs)
+
+`fix/auth-google-sub`:
+
+- [x] `lib/auth.ts` rewritten to key `users.google_id` on the real Google
+      `sub` (from `account.providerAccountId`), not NextAuth's generated
+      UUID. Fixes the bug where `/review/new` bounced authenticated users
+      back to sign-in because the session callback couldn't find their row.
+- [x] Session augmented so `session.user.id` is typed everywhere
+- [x] `internalUserId` cached on the JWT to avoid a DB round-trip per request
+
+`feat/i18n-toggle`:
+
+- [x] `lib/i18n/strings-bn.ts` — Bangla bundle (source of truth for the `Strings` type)
+- [x] `lib/i18n/strings-en.ts` — full English mirror
+- [x] `lib/i18n/shared.ts` — pure helpers (Locale type, stringsFor, cookie name)
+- [x] `lib/i18n/index.ts` — server-only `getLocale()` / `getStrings()` via `next/headers`
+- [x] `lib/i18n/client.tsx` — `LocaleProvider` + `useLocale()` + `useStrings()`
+- [x] `app/api/locale/route.ts` — public POST that sets the `pk_lang` cookie
+- [x] `components/i18n/LanguageToggle.tsx` — pill toggle in the navbar
+- [x] Root layout + Navbar + Homepage + SearchBox refactored to use the live strings
+- [x] Legacy `STRINGS` re-export in `lib/strings.ts` kept for the rest of the app
+      — progressive migration; other pages stay Bangla-only for now
 
 ---
 
