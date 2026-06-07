@@ -4,13 +4,18 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { SearchResult, SearchResultKind } from '@/lib/search'
-import { STRINGS } from '@/lib/strings'
+import { useStrings, useLocale } from '@/lib/i18n/client'
 import { Badge } from '@/components/ui/badge'
 
-const KIND_LABELS: Record<SearchResultKind, string> = {
+const KIND_LABELS_BN: Record<SearchResultKind, string> = {
   university: 'বিশ্ববিদ্যালয়',
   department: 'বিভাগ',
   professor: 'শিক্ষক',
+}
+const KIND_LABELS_EN: Record<SearchResultKind, string> = {
+  university: 'University',
+  department: 'Department',
+  professor: 'Professor',
 }
 
 const KIND_VARIANT: Record<SearchResultKind, 'default' | 'secondary' | 'outline'> = {
@@ -29,6 +34,10 @@ interface Props {
 
 export function SearchBox({ variant = 'hero', placeholder, autoFocus = false }: Props) {
   const router = useRouter()
+  const strings = useStrings()
+  const locale = useLocale()
+  const KIND_LABELS = locale === 'en' ? KIND_LABELS_EN : KIND_LABELS_BN
+
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [open, setOpen] = useState(false)
@@ -152,7 +161,7 @@ export function SearchBox({ variant = 'hero', placeholder, autoFocus = false }: 
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => query.trim().length >= 2 && setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder={placeholder ?? STRINGS.site.searchPlaceholder}
+          placeholder={placeholder ?? strings.site.searchPlaceholder}
           autoFocus={autoFocus}
           autoComplete="off"
           spellCheck={false}
@@ -170,7 +179,7 @@ export function SearchBox({ variant = 'hero', placeholder, autoFocus = false }: 
         >
           {visibleResults.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-              কোনো ফলাফল পাওয়া যায়নি
+              {locale === 'en' ? 'No results found' : 'কোনো ফলাফল পাওয়া যায়নি'}
             </div>
           ) : (
             <ul className="py-1">
@@ -201,7 +210,7 @@ export function SearchBox({ variant = 'hero', placeholder, autoFocus = false }: 
                   onClick={() => setOpen(false)}
                   className="block px-3 py-2 text-center text-xs font-medium text-primary hover:bg-muted/60"
                 >
-                  সব ফলাফল দেখুন →
+                  {locale === 'en' ? 'See all results →' : 'সব ফলাফল দেখুন →'}
                 </Link>
               </li>
             </ul>
