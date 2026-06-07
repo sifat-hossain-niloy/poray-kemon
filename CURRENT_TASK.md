@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Report flow live — 3-strike auto-hide on top of helpful voting
-**Last updated:** June 2026 (Session 5)
-**Active branch:** `feat/report-review` (PR open against main)
+**Phase:** Professor profile complete — combined score + per-course full reviews list with sort & pagination
+**Last updated:** June 2026 (Session 6)
+**Active branch:** `feat/professor-profile-full` (PR open against main)
 
 ---
 
@@ -60,7 +60,7 @@
 - [x] `app/professors/[slug]/page.tsx` switched to dynamic; top 3 reviews
       per course rendered with per-viewer vote state in one DB round-trip
 
-### Session 5 — report a review (this branch)
+### Session 5 — report a review (`feat/report-review`, merged)
 
 - [x] `lib/reports.ts` — pure helpers: AUTO_HIDE_THRESHOLD, shouldAutoHide(),
       Redis dedup key + TTL constants
@@ -70,7 +70,20 @@
 - [x] `components/review/ReportButton.tsx` — native `<dialog>` modal with
       radio reasons, optional details textarea, OAuth fallback for unauth
 - [x] ReviewCard footer extended with the report button
-- [x] Unit tests for the threshold + dedup-key helpers (8 cases) — **44 total**
+- [x] Unit tests for the threshold + dedup-key helpers (8 cases) — 44 total
+
+### Session 6 — full professor profile (this branch)
+
+- [x] `lib/professor-stats.ts` — pure helper for combined weighted score
+      across all courses (weights = review_count); 5 unit tests covering
+      empty / zero-review / weighted / null-safety edges
+- [x] `app/professors/[slug]/page.tsx` — added Level-1 combined-score card
+      (SRS §4.6 FR-STAT-02): big overall score, recommend %, all 4 dims;
+      each course card gets a "সব রিভিউ দেখুন →" link when count > 3
+- [x] `app/professors/[slug]/[course-slug]/page.tsx` — new page with:
+      breadcrumb, per-course aggregate header, helpful/recent sort tabs,
+      10-per-page pagination, batched per-viewer vote lookup, empty state
+- [x] **49 unit tests pass** (+5 new)
 
 ---
 
@@ -78,23 +91,12 @@
 
 After this PR is merged, the next steps from SRS are:
 
-### Step 1 — Full professor profile page
-
-Replace the current stub with:
-
-- Combined weighted score (across all courses)
-- Per-course aggregate cards
-- Reviews list (sorted by helpful by default, secondary "recent")
-- Pagination
-- Empty state when no reviews
-  New branch: `feat/professor-profile-full`.
-
-### Step 2 — Admin panel
+### Step 1 — Admin panel
 
 `app/admin/*` — password login, moderation queue, edit/hide/delete actions, manual professor merging.
 New branch: `feat/admin-panel`.
 
-### Step 3 — Integration tests
+### Step 2 — Integration tests
 
 `__tests__/integration/reviews-submission.test.ts` — full API tests against the test DB (port 5435), including the anonymity transaction atomicity check.
 New branch: `test/integration-reviews-api`.
