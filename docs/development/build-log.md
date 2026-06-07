@@ -246,6 +246,80 @@ to collect the viewer's votes across the whole page. No N+1.
 
 ---
 
+## Session 5 — June 2026 (`feat/report-review`)
+
+### What was built — the report flow + 3-strike auto-hide
+
+A logged-in viewer can flag any review as fake / offensive / personal /
+wrong-professor / other. At 3 distinct pending reports on the same review,
+`moderation_status` flips to `flagged_hidden` and the review is replaced
+by the SRS §4.9 transparency notice. Admin can reinstate.
+
+### API design (`app/api/reports/route.ts`)
+
+`POST /api/reports`
+
+1. **Auth required** — deliberate MVP deviation from the SRS. Open reports
+   are an abuse vector: anyone could script 3 POSTs and hide a legitimate
+   review. Requiring an authenticated session is the cheapest defence.
+2. Zod validate `{ review_id, reason, details? }`
+3. Confirm review exists and isn't already deleted → 404 otherwise
+4. **Redis dedup**: `SET reported:{userId}:{reviewId} 1 EX 2592000 NX`.
+   Atomically refuses to overwrite an existing key. If the key was already
+   set, return 201 idempotently (don't leak the dedup mechanism). If Redis
+   is unreachable, we proceed without dedup and log a warning — admin will
+   catch any abuse from the queue.
+5. `prisma.$transaction`:
+   - INSERT into `reports` (no `user_id` column — the report itself stays
+     anonymous; the Redis key is the only place the link briefly exists)
+   - COUNT pending reports on this review
+   - If count ≥ `AUTO_HIDE_THRESHOLD` (3) and the review isn't already
+     hidden, UPDATE `reviews.moderation_status = 'flagged_hidden'`
+   - Return whether we hid this round
+6. On auto-hide, invalidate Redis caches for `stats:site` and
+   `prof:{slug}`. If the DB write fails, roll back the Redis dedup key so
+   the user can retry without being silently swallowed.
+
+### Why the report itself stays user-anonymous
+
+We don't write `user_id` to the `reports` row. The `(userId, reviewId)`
+link lives ONLY in Redis with a 30-day TTL. After that window the user
+can report the same review again (in case it's been edited or
+reinstated). Admin sees the report content + reason + details but not
+who filed it, which mirrors the review-anonymity principle and keeps the
+data-protection footprint small.
+
+### Client (`ReportButton.tsx`)
+
+- Renders a small flag icon + "রিপোর্ট করুন" link
+- Click while signed-out → triggers `signIn('google')` immediately
+- Click while signed-in → opens a native `<dialog>` modal with:
+  - 5 radio reasons from `REPORT_REASONS` (matches Prisma enum)
+  - Optional details textarea (max 500 chars)
+  - Cancel / Submit
+  - Success state shows confirmation message and a close button
+- Click on backdrop dismisses the dialog
+- Uses `<dialog>` to avoid pulling in another shadcn primitive
+
+### Verified
+
+- `pnpm typecheck` ✓, `pnpm lint` ✓, `pnpm test` ✓ (**44 tests pass**: +8 new)
+- Live smoke tests:
+  - `POST /api/reports` (no session) → 401 with Bangla error
+  - All endpoints still 200 (homepage, university page, health)
+
+### Decisions
+
+| Decision                  | Reason                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| Auth required for reports | Abuse-prevention; cheap; matches voting pattern                                       |
+| Redis dedup (not DB)      | No migration needed; TTL gives reasonable retry window; reports table stays anonymous |
+| Native `<dialog>` element | Avoid adding a new shadcn dialog primitive for a single modal                         |
+| AUTO_HIDE_THRESHOLD = 3   | Matches SRS §4.9 FR-MOD-A-04                                                          |
+| Idempotent dedup response | Returns 201 on duplicate so script-kiddies don't learn the threshold                  |
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
@@ -275,6 +349,7 @@ As features are completed, add them here for quick lookup.
 | Review form page | `app/review/new/page.tsx`, `components/review/ReviewForm.tsx` | Auth-gated, find-or-create professor, 4 ratings + tags + optional text + honeypot |
 | Helpful voting API | `app/api/reviews/[id]/helpful/route.ts` | POST toggle + GET status; transactional vote+counter; race-safe |
 | Review card + helpful button | `components/review/ReviewCard.tsx`, `components/review/HelpfulButton.tsx` | Server card + client button with optimistic UI and sign-in fallback |
+| Report a review | `app/api/reports/route.ts`, `components/review/ReportButton.tsx`, `lib/reports.ts` | Auth-required POST, Redis NX dedup, 3-strike transactional auto-hide |
 
 ### Planned Features (from SRS)
 
@@ -287,7 +362,7 @@ As features are completed, add them here for quick lookup.
 | Search API                       | P0       | ✅ Done (Session 2/2.5)                                         |
 | Review submission API            | P0       | ✅ Done (`feat/review-submission`)                              |
 | Helpful voting                   | P0       | ✅ Done (`feat/helpful-voting`)                                 |
-| Report a review                  | P0       | 🔲 Not started                                                  |
+| Report a review                  | P0       | ✅ Done (`feat/report-review`)                                  |
 | Admin panel                      | P0       | 🔲 Not started                                                  |
 | Soft moderation (keyword filter) | P0       | ✅ Done (`feat/review-submission`)                              |
 | Site-wide stats                  | P0       | ✅ Done (Session 2)                                             |

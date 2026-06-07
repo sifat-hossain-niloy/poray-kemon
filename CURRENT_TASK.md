@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Helpful voting live — first community-engagement primitive on top of the write path
-**Last updated:** June 2026 (Session 4)
-**Active branch:** `feat/helpful-voting` (PR open against main)
+**Phase:** Report flow live — 3-strike auto-hide on top of helpful voting
+**Last updated:** June 2026 (Session 5)
+**Active branch:** `feat/report-review` (PR open against main)
 
 ---
 
@@ -49,7 +49,7 @@
 - [x] Branch + PR workflow now in effect; `gh` CLI optional
 - [x] CI fix: pnpm version conflict (`fix/ci-pnpm-version-conflict`, merged)
 
-### Session 4 — helpful voting (this branch)
+### Session 4 — helpful voting (`feat/helpful-voting`, merged)
 
 - [x] `app/api/reviews/[id]/helpful/route.ts` — POST toggle + GET status,
       transactional vote + counter, race-condition recovery via unique key
@@ -60,19 +60,25 @@
 - [x] `app/professors/[slug]/page.tsx` switched to dynamic; top 3 reviews
       per course rendered with per-viewer vote state in one DB round-trip
 
+### Session 5 — report a review (this branch)
+
+- [x] `lib/reports.ts` — pure helpers: AUTO_HIDE_THRESHOLD, shouldAutoHide(),
+      Redis dedup key + TTL constants
+- [x] `app/api/reports/route.ts` — auth-required POST, Redis NX dedup on
+      `(userId, reviewId)`, transactional INSERT + auto-hide at 3 pending
+      reports, cache invalidation when a review gets hidden
+- [x] `components/review/ReportButton.tsx` — native `<dialog>` modal with
+      radio reasons, optional details textarea, OAuth fallback for unauth
+- [x] ReviewCard footer extended with the report button
+- [x] Unit tests for the threshold + dedup-key helpers (8 cases) — **44 total**
+
 ---
 
 ## What We Are Building Next
 
 After this PR is merged, the next steps from SRS are:
 
-### Step 1 — Report a review
-
-`app/api/reports/route.ts` — public (no auth required).
-At 3 pending reports, trigger auto-hide: set `reviews.moderation_status = 'flagged_hidden'`.
-New branch: `feat/report-review`.
-
-### Step 2 — Full professor profile page
+### Step 1 — Full professor profile page
 
 Replace the current stub with:
 
@@ -83,12 +89,12 @@ Replace the current stub with:
 - Empty state when no reviews
   New branch: `feat/professor-profile-full`.
 
-### Step 3 — Admin panel
+### Step 2 — Admin panel
 
 `app/admin/*` — password login, moderation queue, edit/hide/delete actions, manual professor merging.
 New branch: `feat/admin-panel`.
 
-### Step 4 — Integration tests
+### Step 3 — Integration tests
 
 `__tests__/integration/reviews-submission.test.ts` — full API tests against the test DB (port 5435), including the anonymity transaction atomicity check.
 New branch: `test/integration-reviews-api`.
