@@ -320,6 +320,57 @@ data-protection footprint small.
 
 ---
 
+## Session 6 — June 2026 (`feat/professor-profile-full`)
+
+### What was built — the full two-level professor view (SRS §4.6 FR-STAT-02)
+
+The professor profile previously showed only per-course cards with a 3-review
+preview. It now satisfies the SRS in full:
+
+**Level 1 — Combined professor score (top of profile)**
+
+- Weighted average across all courses by `review_count`
+- All four rating dimensions + recommend percentage
+- Total review count + course count
+
+**Level 2 — Per-course cards (always visible)**
+
+- Same as before, but now with a "সব {count} রিভিউ দেখুন →" link when
+  the course has more reviews than the 3-review preview
+
+**New: `/professors/[slug]/[course-slug]`**
+
+- Full reviews list for one professor × one course
+- Sort tabs: helpful (default, per SRS FR-VOTE-04) / recent
+- Pagination: 10 per page via `?page=N` (capped at 1000 to defang crawlers)
+- Per-course aggregate header (recommend %, all 4 rating dimensions)
+- Empty state with localised copy
+- Breadcrumb: universities › {uni} › {professor name} › current page
+
+### Why `lib/professor-stats.ts` is a separate module
+
+The combined-score math is testable in isolation (5 unit tests cover the
+empty case, zero-count courses, weighted averaging, recommend-percentage,
+and null-safety). The page just passes Prisma rows in and renders. Same
+pattern as `lib/aggregation.ts` for per-review running averages.
+
+### Sort URL contract
+
+- Default (helpful): `/professors/x/y` — no `sort` param in URL
+- Recent: `/professors/x/y?sort=recent`
+- Page 2: `/professors/x/y?page=2` (helpful default) or `?sort=recent&page=2`
+
+Keeping the default sort out of the URL means crawlers see only one
+canonical URL for "show the most useful reviews", which is what we want
+indexed. Skipping `page=1` follows the same convention.
+
+### Verified
+
+- `pnpm typecheck` ✓, `pnpm lint` ✓, `pnpm test` ✓ (**49 tests**, +5 new)
+- Live smoke: missing professor → 404; missing course on existing professor → 404
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
@@ -350,20 +401,23 @@ As features are completed, add them here for quick lookup.
 | Helpful voting API | `app/api/reviews/[id]/helpful/route.ts` | POST toggle + GET status; transactional vote+counter; race-safe |
 | Review card + helpful button | `components/review/ReviewCard.tsx`, `components/review/HelpfulButton.tsx` | Server card + client button with optimistic UI and sign-in fallback |
 | Report a review | `app/api/reports/route.ts`, `components/review/ReportButton.tsx`, `lib/reports.ts` | Auth-required POST, Redis NX dedup, 3-strike transactional auto-hide |
+| Combined professor stats | `lib/professor-stats.ts` | Weighted by review_count across all courses (SRS Level 1) |
+| Full professor profile | `app/professors/[slug]/page.tsx` | Combined score card + per-course cards + 3-review preview + "see all" links |
+| Per-course reviews list | `app/professors/[slug]/[course-slug]/page.tsx` | Sort (helpful/recent), pagination (10/pg), batched vote state |
 
 ### Planned Features (from SRS)
 
-| Feature                          | Priority | Status                                                          |
-| -------------------------------- | -------- | --------------------------------------------------------------- |
-| Professor profile page (full)    | P0       | 🟡 Stub with 3-review preview — full sort/pagination still TODO |
-| Review submission form           | P0       | ✅ Done (`feat/review-submission`)                              |
-| University directory             | P0       | ✅ Done (Session 2)                                             |
-| Department pages                 | P0       | ✅ Done (Session 2)                                             |
-| Search API                       | P0       | ✅ Done (Session 2/2.5)                                         |
-| Review submission API            | P0       | ✅ Done (`feat/review-submission`)                              |
-| Helpful voting                   | P0       | ✅ Done (`feat/helpful-voting`)                                 |
-| Report a review                  | P0       | ✅ Done (`feat/report-review`)                                  |
-| Admin panel                      | P0       | 🔲 Not started                                                  |
-| Soft moderation (keyword filter) | P0       | ✅ Done (`feat/review-submission`)                              |
-| Site-wide stats                  | P0       | ✅ Done (Session 2)                                             |
-| About / privacy policy page      | P0       | 🔲 Not started                                                  |
+| Feature                          | Priority | Status                                  |
+| -------------------------------- | -------- | --------------------------------------- |
+| Professor profile page (full)    | P0       | ✅ Done (`feat/professor-profile-full`) |
+| Review submission form           | P0       | ✅ Done (`feat/review-submission`)      |
+| University directory             | P0       | ✅ Done (Session 2)                     |
+| Department pages                 | P0       | ✅ Done (Session 2)                     |
+| Search API                       | P0       | ✅ Done (Session 2/2.5)                 |
+| Review submission API            | P0       | ✅ Done (`feat/review-submission`)      |
+| Helpful voting                   | P0       | ✅ Done (`feat/helpful-voting`)         |
+| Report a review                  | P0       | ✅ Done (`feat/report-review`)          |
+| Admin panel                      | P0       | 🔲 Not started                          |
+| Soft moderation (keyword filter) | P0       | ✅ Done (`feat/review-submission`)      |
+| Site-wide stats                  | P0       | ✅ Done (Session 2)                     |
+| About / privacy policy page      | P0       | 🔲 Not started                          |

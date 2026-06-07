@@ -6,13 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ReviewCard } from '@/components/review/ReviewCard'
+import { combineProfessorStats } from '@/lib/professor-stats'
 import { STRINGS } from '@/lib/strings'
 import Link from 'next/link'
 
-// Dynamic now: we need the authenticated user's per-review vote state.
-// ISR + per-user state in the SAME render is impossible without a client
-// fetch — the dynamic render keeps the page authoritative for both signed-in
-// and signed-out viewers.
+// Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
@@ -60,8 +58,22 @@ export default async function ProfessorPage({ params }: PageProps) {
 
   if (!professor) notFound()
 
-  // Fetch the viewer's votes across ALL visible reviews on this page in one
-  // round-trip. Index lookup is cheap; this beats N+1 client requests.
+  // Combined weighted score across all courses
+  const combined = combineProfessorStats(
+    professor.professorCourses.map((pc) => ({
+      reviewCount: pc.reviewCount,
+      avgTeachingQuality: pc.avgTeachingQuality ? Number(pc.avgTeachingQuality.toString()) : null,
+      avgGradingFairness: pc.avgGradingFairness ? Number(pc.avgGradingFairness.toString()) : null,
+      avgCourseDifficulty: pc.avgCourseDifficulty
+        ? Number(pc.avgCourseDifficulty.toString())
+        : null,
+      avgAttendance: pc.avgAttendance ? Number(pc.avgAttendance.toString()) : null,
+      wouldRecommendPct: pc.wouldRecommendPct ? Number(pc.wouldRecommendPct.toString()) : null,
+      overallScore: pc.overallScore ? Number(pc.overallScore.toString()) : null,
+    })),
+  )
+
+  // Fan-out viewer's votes across every review on the page in ONE query
   const allReviewIds = professor.professorCourses.flatMap((pc) => pc.reviews.map((r) => r.id))
   const votedIds = new Set<number>()
   if (viewerId && allReviewIds.length > 0) {
@@ -114,7 +126,41 @@ export default async function ProfessorPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* ── Courses + recent reviews ─────────────────────────────────────── */}
+      {/* ── Combined score (SRS §4.6 FR-STAT-02 — Level 1) ───────────────── */}
+      {combined.totalReviews > 0 ? (
+        <Card className="mb-8">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <CardTitle className="text-base">{STRINGS.professor.overallScore}</CardTitle>
+              <span className="text-xs text-muted-foreground">
+                {STRINGS.professor.reviewCount(combined.totalReviews)} ·{' '}
+                {combined.coursesWithReviews.toLocaleString('bn-BD')} টি কোর্স
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-baseline gap-3">
+              <span className="text-4xl font-bold tabular-nums">
+                {combined.overallScore?.toFixed(1) ?? '—'}
+              </span>
+              <span className="text-sm text-muted-foreground">/ ৫</span>
+              {combined.wouldRecommendPct !== null ? (
+                <Badge variant="secondary" className="ml-auto">
+                  {STRINGS.professor.wouldRecommendPercent(Math.round(combined.wouldRecommendPct))}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat label={STRINGS.ratings.teachingQuality} value={combined.avgTeachingQuality} />
+              <Stat label={STRINGS.ratings.gradingFairness} value={combined.avgGradingFairness} />
+              <Stat label={STRINGS.ratings.courseDifficulty} value={combined.avgCourseDifficulty} />
+              <Stat label={STRINGS.ratings.attendance} value={combined.avgAttendance} />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ── Courses + preview reviews (SRS §4.6 FR-STAT-02 — Level 2) ────── */}
       <section>
         <h2 className="mb-4 text-xl font-semibold">কোর্সসমূহ</h2>
 
@@ -126,56 +172,71 @@ export default async function ProfessorPage({ params }: PageProps) {
           </Card>
         ) : (
           <div className="space-y-6">
-            {professor.professorCourses.map((pc) => (
-              <div key={pc.id} className="space-y-3">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <CardTitle className="text-base">
-                        {pc.course.courseCode ? `${pc.course.courseCode} — ` : ''}
-                        {pc.course.courseName}
-                      </CardTitle>
-                      <span className="text-xs text-muted-foreground">
-                        {STRINGS.professor.reviewCount(pc.reviewCount)}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                    <Stat label={STRINGS.ratings.teachingQuality} value={pc.avgTeachingQuality} />
-                    <Stat label={STRINGS.ratings.gradingFairness} value={pc.avgGradingFairness} />
-                    <Stat label={STRINGS.ratings.courseDifficulty} value={pc.avgCourseDifficulty} />
-                    <Stat label={STRINGS.ratings.attendance} value={pc.avgAttendance} />
-                  </CardContent>
-                </Card>
+            {professor.professorCourses.map((pc) => {
+              const courseSlug = pc.course.slug ?? null
+              const courseHref = courseSlug ? `/professors/${professor.slug}/${courseSlug}` : null
+              const hasReviews = pc.reviewCount > 0
 
-                {pc.reviews.length > 0 ? (
-                  <div className="ml-2 space-y-2 border-l-2 border-border pl-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {STRINGS.reviewDisplay.sortByHelpful}
-                    </h3>
-                    {pc.reviews.map((r) => (
-                      <ReviewCard
-                        key={r.id}
-                        review={{
-                          id: r.id,
-                          teachingQuality: r.teachingQuality,
-                          gradingFairness: r.gradingFairness,
-                          courseDifficulty: r.courseDifficulty,
-                          attendanceStrictness: r.attendanceStrictness,
-                          wouldRecommend: r.wouldRecommend,
-                          reviewText: r.reviewText,
-                          tags: r.tags,
-                          helpfulCount: r.helpfulCount,
-                          submittedAt: r.submittedAt,
-                          moderationStatus: r.moderationStatus,
-                        }}
-                        userVoted={votedIds.has(r.id)}
+              return (
+                <div key={pc.id} className="space-y-3">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <CardTitle className="text-base">
+                          {pc.course.courseCode ? `${pc.course.courseCode} — ` : ''}
+                          {pc.course.courseName}
+                        </CardTitle>
+                        <span className="text-xs text-muted-foreground">
+                          {STRINGS.professor.reviewCount(pc.reviewCount)}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                      <Stat label={STRINGS.ratings.teachingQuality} value={pc.avgTeachingQuality} />
+                      <Stat label={STRINGS.ratings.gradingFairness} value={pc.avgGradingFairness} />
+                      <Stat
+                        label={STRINGS.ratings.courseDifficulty}
+                        value={pc.avgCourseDifficulty}
                       />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
+                      <Stat label={STRINGS.ratings.attendance} value={pc.avgAttendance} />
+                    </CardContent>
+                  </Card>
+
+                  {hasReviews && pc.reviews.length > 0 ? (
+                    <div className="ml-2 space-y-2 border-l-2 border-border pl-4">
+                      {pc.reviews.map((r) => (
+                        <ReviewCard
+                          key={r.id}
+                          review={{
+                            id: r.id,
+                            teachingQuality: r.teachingQuality,
+                            gradingFairness: r.gradingFairness,
+                            courseDifficulty: r.courseDifficulty,
+                            attendanceStrictness: r.attendanceStrictness,
+                            wouldRecommend: r.wouldRecommend,
+                            reviewText: r.reviewText,
+                            tags: r.tags,
+                            helpfulCount: r.helpfulCount,
+                            submittedAt: r.submittedAt,
+                            moderationStatus: r.moderationStatus,
+                          }}
+                          userVoted={votedIds.has(r.id)}
+                        />
+                      ))}
+
+                      {pc.reviewCount > REVIEWS_PER_COURSE_PREVIEW && courseHref ? (
+                        <Link
+                          href={courseHref}
+                          className="block rounded-md border border-border bg-card px-3 py-2 text-center text-xs font-medium text-primary transition-colors hover:bg-muted"
+                        >
+                          সব {pc.reviewCount.toLocaleString('bn-BD')} রিভিউ দেখুন →
+                        </Link>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
           </div>
         )}
       </section>
@@ -183,12 +244,19 @@ export default async function ProfessorPage({ params }: PageProps) {
   )
 }
 
-function Stat({ label, value }: { label: string; value: { toString: () => string } | null }) {
+function Stat({
+  label,
+  value,
+}: {
+  label: string
+  value: number | { toString: () => string } | null
+}) {
+  const num = typeof value === 'number' ? value : value ? Number(value.toString()) : null
   return (
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-0.5 text-lg font-semibold tabular-nums">
-        {value ? Number(value.toString()).toFixed(1) : '—'}
+        {num !== null ? num.toFixed(1) : '—'}
       </div>
     </div>
   )
