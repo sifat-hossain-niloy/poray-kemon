@@ -255,10 +255,12 @@ Tracks who reviewed which professor+course. **Decoupled from `reviews`.**
 
 ## Seed Data Plan
 
-On first deployment, seed:
+On first deployment, `prisma/seed.ts` populates:
 
-1. `universities` — 20 BD universities (see SRS Appendix A)
-2. `departments` — ~5-10 departments per university
-3. `admin_users` — one admin account
+1. `universities` — **161 BD universities** curated from Wikipedia's _List of universities in Bangladesh_ (English names + canonical acronyms) and the corresponding `bn.wikipedia.org` page (Bangla names). Every row carries `name_en`, `name_bn`, `short_name`, `slug`, `location_city`, `type` — no inference, no auto-generated initials.
+2. `departments` — curated lists for 15 detailed universities (BUET, DU, NSU, BRACU, IUB, AIUB, RUET, CUET, KUET, SUST, IUT, DIU, EWU, UIU, MIST). The remaining ~146 universities start with no departments — students populate them via the in-form "Add as new department" flow (see `feat/department-typeahead`).
+3. `admin_users` — one admin account (`username=admin`, password from `ADMIN_SEED_PASSWORD` env var, defaults to `changeme123` for dev).
 
-Professor and course records are created automatically by the first review submission.
+Professor and course records are created automatically by the first review submission. Departments are created the same way once the department typeahead lands.
+
+**Idempotency.** The seed is safe to re-run against an existing database. It parks every row's `short_name`/`slug` under a `__tmp_<id>` placeholder first, then runs canonical upserts matched by `name_en` (which is `@unique`). After the upserts, rows still holding a placeholder are pruned if they have no professors attached, or flagged for admin review otherwise. This means an older deployment seeded with auto-generated acronyms (`BU2`, `GUB3`, etc.) gets healed in place by a single `pnpm db:seed` — no manual data migration required.

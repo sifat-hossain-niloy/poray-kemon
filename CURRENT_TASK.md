@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Language toggle live (bn ↔ en) + auth fix for /review/new
-**Last updated:** June 2026 (Session 9)
-**Active branches:** `fix/auth-google-sub` and `feat/i18n-toggle` (both PRs open)
+**Phase:** Review-form professor typeahead + canonical BD university catalog
+**Last updated:** June 2026 (Session 10)
+**Active branches:** `feat/professor-typeahead-with-add` (PR open) and `feat/seed-all-bd-universities` (PR open)
 
 ---
 
@@ -143,21 +143,62 @@
 - [x] Legacy `STRINGS` re-export in `lib/strings.ts` kept for the rest of the app
       — progressive migration; other pages stay Bangla-only for now
 
+### Session 10 — professor typeahead + canonical BD university catalog (two PRs)
+
+`feat/professor-typeahead-with-add`:
+
+- [x] `app/api/professors/search/route.ts` — scoped (uni+dept) pg_trgm fuzzy + ILIKE search, joins `professor_courses` for `review_count`. Public.
+- [x] `components/review/ProfessorTypeahead.tsx` — debounced (180 ms), abort
+      in-flight on each keystroke, opaque floating panel (`bg-card` +
+      `shadow-lg`) so course-field rows don't bleed through.
+- [x] Dashed "Add 'xxxx' as a new professor" fallback row when no exact
+      match. On submit, the existing `POST /api/reviews` auto-create path
+      creates the Professor row — no extra client-side work.
+- [x] `ReviewForm.tsx` rewired: picker is disabled until both uni and
+      dept are chosen; switching either clears the selection.
+
+`feat/seed-all-bd-universities`:
+
+- [x] `prisma/seed.ts` rewritten to use a curated Wikipedia-sourced
+      catalog (161 entries). English from
+      `List_of_universities_in_Bangladesh`, Bangla from the equivalent
+      page on bn.wikipedia.
+- [x] Acronyms are Wikipedia-canonical. No more generated initials, no
+      more `BU/BU1/BU2` numeric suffixes. Where two institutions
+      naturally share an acronym, the most-recognised owner keeps the
+      plain form and the rest get readable suffixes (`BdshU`, `BritU`,
+      `BdU`, etc.).
+- [x] Each row carries `nameEn`, `nameBn`, `shortName`, `slug`,
+      `locationCity`, `type` — no auto-generation, no inference.
+- [x] **Idempotent heal-in-place re-seed**: every existing
+      `short_name`/`slug` is parked under a `__tmp_<id>` namespace
+      first, canonical upserts run in a clean field, then any row still
+      holding a placeholder is pruned if it has no professors (or
+      flagged for admin review if it does). Cascades departments before
+      pruning so FKs stay clean.
+- [x] Departments table unchanged; only the 15 detailed unis still
+      carry a curated department list. The remaining ~146 will be
+      filled in by the upcoming department typeahead.
+
 ---
 
 ## What We Are Building Next
 
-After this PR is merged, the next steps from SRS are:
+After these PRs are merged, the next steps are:
 
-### Step 1 — About / privacy policy page
+### Step 1 — Department typeahead + add-as-new
 
-Static content; explains the anonymity contract for end-users.
-New branch: `feat/about-page`.
+Same pattern as professor: scoped search endpoint, debounced typeahead,
+"Add 'CSE - Computer Science and Engineering' as a new department"
+fallback with smart abbreviation/full-name parsing on the server.
+The review POST handler will auto-create a Department row when
+`department_id` is absent.
 
-### Step 2 — Admin: add/edit universities + departments
+### Step 2 — Admin merge tool
 
-Currently universities/departments live only in seed. Add CRUD pages.
-New branch: `feat/admin-universities`.
+Once add-as-new is live for departments, admins need a "Merge
+departments" action so duplicates ("CSE" + "Computer Science and
+Engineering" + "C.S.E.") can be collapsed into one canonical row.
 
 ---
 
