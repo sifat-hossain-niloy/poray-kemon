@@ -186,48 +186,51 @@ export function ProfessorTypeahead({
         />
 
         {showDropdown ? (
-          <div className="absolute left-0 right-0 top-full z-20 mt-2 space-y-2">
-            {loading ? (
-              <div className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-                …
-              </div>
+          // Opaque floating panel — without bg-card + shadow on the wrapper,
+          // the absolute children let the form rows beneath bleed through.
+          <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-md border border-border bg-card shadow-lg">
+            {loading ? <div className="px-3 py-2.5 text-sm text-muted-foreground">…</div> : null}
+
+            {hits.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {hits.map((h) => (
+                  <li key={h.id}>
+                    <button
+                      type="button"
+                      // onMouseDown so the click fires before onBlur closes the dropdown.
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        onSelect({ id: h.id, name_en: h.name_en })
+                        setQuery('')
+                        setHits([])
+                        setFocused(false)
+                      }}
+                      className="flex w-full items-center justify-between gap-3 bg-card px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-base font-semibold text-primary-foreground">
+                          {initial(h.name_en)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{h.name_en}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {[h.designation, t.reviewCount(h.review_count)]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                        </div>
+                      </div>
+                      <span aria-hidden className="text-muted-foreground">
+                        ›
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ) : null}
 
-            {hits.map((h) => (
-              <button
-                key={h.id}
-                type="button"
-                // onMouseDown so the click fires before the input's onBlur cancels the dropdown.
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  onSelect({ id: h.id, name_en: h.name_en })
-                  setQuery('')
-                  setHits([])
-                  setFocused(false)
-                }}
-                className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5 text-left text-sm shadow-sm transition-colors hover:bg-muted"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-base font-semibold text-primary-foreground">
-                    {initial(h.name_en)}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{h.name_en}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {[h.designation, t.reviewCount(h.review_count)].filter(Boolean).join(' · ')}
-                    </div>
-                  </div>
-                </div>
-                <span aria-hidden className="text-muted-foreground">
-                  ›
-                </span>
-              </button>
-            ))}
-
             {!loading && hits.length === 0 && trimmed.length >= 1 && !showAddNew ? (
-              <div className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-                {t.empty}
-              </div>
+              <div className="px-3 py-2.5 text-sm text-muted-foreground">{t.empty}</div>
             ) : null}
 
             {showAddNew ? (
@@ -240,7 +243,12 @@ export function ProfessorTypeahead({
                   setHits([])
                   setFocused(false)
                 }}
-                className="flex w-full items-center gap-2 rounded-md border-2 border-dashed border-primary/70 bg-primary/5 px-3 py-2.5 text-left text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                className={
+                  'flex w-full items-center gap-2 bg-card px-3 py-2.5 text-left text-sm font-medium text-primary transition-colors hover:bg-primary/10 ' +
+                  (hits.length > 0 || (!loading && trimmed.length >= 1)
+                    ? 'border-t border-border'
+                    : '')
+                }
               >
                 <span aria-hidden className="text-lg leading-none">
                   +
