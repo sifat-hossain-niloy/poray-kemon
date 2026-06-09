@@ -1,75 +1,89 @@
-name: CD — Deploy to Production
+name: CD — Build & push production image
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
 
-# Only one deploy runs at a time
 concurrency:
-  group: production-deploy
+  group: production-build-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write # push to GHCR
+  id-token: write # OIDC for cosign / future provenance
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-  deploy:
-    name: Deploy
+  # ── Build & push the Docker image ────────────────────────────────────────
+  build:
+    name: Build & push image
     runs-on: ubuntu-latest
-    # Only deploy after CI passes
-    needs: []
-    environment: production
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          version: 10
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-node@v4
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          node-version: 20
-          cache: pnpm
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Layer cache hosted in GHA — speeds up reruns significantly
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # ── Option A: Vercel deployment ──────────────────────────────────────
-      # Uncomment when deploying to Vercel:
-      #
-      # - name: Deploy to Vercel
-      #   uses: amondnet/vercel-action@v25
-      #   with:
-      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
-      #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-      #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-      #     vercel-args: '--prod'
+  # ── Deploy to VPS via SSH (manual until host secrets are wired) ──────────
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    if: false # flip to `if: vars.DEPLOY_ENABLED == 'true'` once SSH secrets are set
+    environment: production
 
-      # ── Option B: Docker deploy to VPS ───────────────────────────────────
-      # Uncomment when deploying to a VPS with Docker:
-      #
-      # - name: Build Docker image
-      #   run: |
-      #     docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
-      #     docker tag ghcr.io/${{ github.repository }}:${{ github.sha }} \
-      #       ghcr.io/${{ github.repository }}:latest
-      #
-      # - name: Push to GitHub Container Registry
-      #   run: |
-      #     echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      #     docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
-      #     docker push ghcr.io/${{ github.repository }}:latest
-      #
-      # - name: Deploy to VPS via SSH
-      #   uses: appleboy/ssh-action@v1
-      #   with:
-      #     host: ${{ secrets.SERVER_HOST }}
-      #     username: ${{ secrets.SERVER_USER }}
-      #     key: ${{ secrets.SSH_PRIVATE_KEY }}
-      #     script: |
-      #       cd /opt/poraykemon
-      #       git pull origin main
-      #       docker compose -f docker-compose.prod.yml pull nextjs
-      #       docker compose -f docker-compose.prod.yml up -d nextjs
-      #       docker compose -f docker-compose.prod.yml exec nextjs pnpm db:migrate:prod
-
-      - name: Deployment placeholder
-        run: echo "Configure Option A (Vercel) or Option B (Docker VPS) above"
+    steps:
+      - name: Pull and restart on VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/poraykemon
+            export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
+            docker compose -f docker-compose.prod.yml pull nextjs
+            docker compose -f docker-compose.prod.yml up -d --no-deps nextjs
+            # Apply pending migrations against the prod DB
+            docker compose -f docker-compose.prod.yml exec -T nextjs \
+              node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma

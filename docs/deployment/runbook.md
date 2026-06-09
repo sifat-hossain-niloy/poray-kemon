@@ -223,62 +223,97 @@ GitHub Actions runs on every push:
 
 ---
 
-## 8. Production Deployment (Option B — Full Docker)
+## 8. Production Deployment (Docker on VPS)
 
-### Initial Server Setup (DigitalOcean / Hetzner VPS)
+### 8.1 First-time host setup (Ubuntu 22.04 LTS / Debian 12)
 
 ```bash
-# On the VPS (Ubuntu 22.04 LTS)
-
-# Install Docker
+# Install Docker engine + compose plugin
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
+sudo usermod -aG docker "$USER"
+newgrp docker
 
-# Install Docker Compose plugin
-sudo apt install docker-compose-plugin
-
-# Create app directory
-sudo mkdir -p /opt/poraykemon
-sudo chown $USER:$USER /opt/poraykemon
-
-# Clone repo
+# App directory
+sudo mkdir -p /opt/poraykemon && sudo chown "$USER:$USER" /opt/poraykemon
 cd /opt/poraykemon
-git clone https://github.com/your-org/poray-kemon.git .
 
-# Create production env file
-cp .env.example .env.prod
-# Fill in production values
+# Clone — only really needed for the compose file + nginx config; the app
+# itself runs from the GHCR image pulled below.
+git clone https://github.com/sifat-hossain-niloy/poray-kemon.git .
 
-# Start services
-docker compose -f docker-compose.prod.yml up -d
-
-# Run migrations
-docker compose -f docker-compose.prod.yml exec nextjs pnpm db:migrate
-
-# Seed data
-docker compose -f docker-compose.prod.yml exec nextjs pnpm db:seed
+# Configure production env
+cp .env.production.example .env.production
+chmod 600 .env.production
+$EDITOR .env.production   # fill in real secrets
 ```
 
-### SSL with Certbot
+### 8.2 Bootstrap TLS via Certbot (webroot mode)
 
 ```bash
-# Nginx + Certbot for HTTPS
-docker compose -f docker-compose.prod.yml exec nginx certbot --nginx -d poraykemon.com -d www.poraykemon.com
+# Bring up Postgres + Redis + Next.js first so the webroot is reachable
+docker compose -f docker-compose.prod.yml up -d postgres redis nextjs
+
+# Issue certificates
+docker compose -f docker-compose.prod.yml run --rm certbot \
+  certonly --webroot --webroot-path=/var/www/certbot \
+  --email admin@poraykemon.com --agree-tos --no-eff-email \
+  -d poraykemon.com -d www.poraykemon.com
+
+# Start nginx
+docker compose -f docker-compose.prod.yml up -d nginx certbot
 ```
 
-### GitHub Actions SSH Deploy
+The `certbot` service runs a tiny shell loop that calls `certbot renew --quiet`
+every 12 hours. Renewed certs are picked up by nginx on the next reload —
+restart nginx after renewal: `docker compose -f docker-compose.prod.yml exec nginx nginx -s reload`.
 
-Add to repository secrets:
-
-- `SSH_PRIVATE_KEY` — deploy key for the VPS
-- `SERVER_HOST` — VPS IP or hostname
-- `SERVER_USER` — SSH user
-
-The CI pipeline runs:
+### 8.3 Apply migrations + seed
 
 ```bash
-ssh user@host "cd /opt/poraykemon && git pull && docker compose -f docker-compose.prod.yml up -d --build nextjs"
+# Migrations run inside the container so the image has Prisma + the schema
+docker compose -f docker-compose.prod.yml exec -T nextjs \
+  node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma
+
+# Seed universities + admin user (only on first deploy)
+docker compose -f docker-compose.prod.yml exec -T nextjs \
+  node prisma/seed.ts || true
 ```
+
+### 8.4 Automated deployment via CD workflow
+
+`.github/workflows/cd.yml` builds the production image on every push to `main`
+(and on any `v*` tag) and pushes it to GHCR. To wire the deploy step:
+
+1. Create a deploy SSH key on the VPS:
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/poraykemon_deploy -N ""
+   cat ~/.ssh/poraykemon_deploy.pub >> ~/.ssh/authorized_keys
+   ```
+2. Add repository secrets in GitHub Settings → Secrets and variables → Actions:
+   - `SSH_PRIVATE_KEY` — contents of `~/.ssh/poraykemon_deploy` (the private key)
+   - `SERVER_HOST` — VPS IP or hostname
+   - `SERVER_USER` — SSH user (often `deploy` or `ubuntu`)
+3. Add repo variable `DEPLOY_ENABLED=true` (Settings → Variables → Actions)
+4. Open `.github/workflows/cd.yml` and flip `if: false` → `if: vars.DEPLOY_ENABLED == 'true'`
+   on the `deploy` job, then push.
+
+After this, every push to `main` automatically:
+
+1. Builds the multi-stage Docker image (cached via GHA layer cache)
+2. Pushes to `ghcr.io/sifat-hossain-niloy/poray-kemon:sha-<short>` + `latest`
+3. SSHes into the VPS and runs `docker compose pull nextjs && up -d nextjs`
+4. Applies any pending Prisma migrations
+
+### 8.5 Image tagging strategy
+
+| Tag           | Source               | Use                     |
+| ------------- | -------------------- | ----------------------- |
+| `latest`      | every push to `main` | day-to-day deploys      |
+| `sha-<short>` | every commit         | precise rollbacks       |
+| `v1.2.3`      | git tag              | named releases          |
+| `main`        | every push to `main` | same as `latest`, alias |
+
+To roll back: `IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.prod.yml up -d nextjs`.
 
 ---
 
