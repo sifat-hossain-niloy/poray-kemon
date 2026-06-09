@@ -517,19 +517,43 @@ deploy` and `CREATE EXTENSION IF NOT EXISTS pg_trgm` against the test DB.
 
 ---
 
+## Session 9 — June 2026 (`feat/professor-typeahead-with-add` + `feat/seed-all-bd-universities`)
+
+### What was built
+
+- **Professor typeahead picker** in the review form. Replaces the free-text input with a debounced search dropdown scoped to the chosen university + department, plus a dashed "Add 'xxxx' as a new professor" fallback row that lets a student submit even when their professor isn't in the catalog yet. The existing `POST /api/reviews` auto-create path picks up the new name on submit.
+  - `GET /api/professors/search?q=&university_id=&department_id=` — pg_trgm + ILIKE fuzzy match, joins `professor_courses` for `review_count`. Public read; no auth, no tracking.
+  - `components/review/ProfessorTypeahead.tsx` — 180 ms debounce, abort-in-flight, opaque floating panel (`bg-card` + `shadow-lg`) so the form rows beneath don't bleed through, "Change" button to clear a locked-in pick.
+- **Full canonical BD university catalog** seeded from the Wikipedia _List of universities in Bangladesh_ page (English names + acronyms) and the equivalent Bangla Wikipedia page (Bengali names). 161 entries total; 15 still carry curated department lists.
+  - Acronyms come from Wikipedia, not generated initials — no more `BU2 / BU3 / GUB2 / PU4`. When two institutions naturally share an acronym (e.g. four candidates for "BU"), the most-recognised owner keeps the plain form; the others get readable suffixes (`BdshU` for Bangladesh University, `BritU` for Britannia, `BdU` for Bandarban).
+  - **Idempotent heal-in-place**: re-running `pnpm db:seed` against an older DB rewrites stale rows by `nameEn` match, then prunes any leftover row that has no professors attached. Rows with real professors are kept and flagged for admin review rather than silently rewritten.
+  - Earlier bulk seed produced `Independent University` (IU3) as a duplicate of `Independent University, Bangladesh` (IUB) because normalization didn't catch the suffix variant — this version uses Wikipedia's canonical spelling for both fields, so there's only one row per institution.
+
+### Decisions
+
+| Decision                                       | Reason                                                                                                                                                                              |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope professor search by uni + dept           | A global "search Rahman" is useless; the picker only matters inside a context the student already chose                                                                             |
+| Auto-create professors on review submit        | Department-typeahead is next; mirroring the same pattern (server-side auto-create when `*_id` is absent) keeps the form simple                                                      |
+| Curate the catalog instead of crowdsourcing it | A blank university catalog blocks the entire review flow for 80 % of students. Wikipedia gives us a defensible starting point; admins can clean up the long tail via /admin         |
+| Placeholder-rename + upsert dance              | Direct upserts hit unique-constraint collisions when stale rows hold shortNames the canonical list wants. Renaming everything to `__tmp_<id>` first decouples the order of upserts. |
+| Prune by placeholder, not by `nameEn` notIn    | Means we never accidentally delete a row that has real professors attached — those rows can't have a placeholder shortName, since the upsert healed them                            |
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
 
 ### Completed Features
 
-| Feature               | Files                                                | Notes                                                   |
-| --------------------- | ---------------------------------------------------- | ------------------------------------------------------- |
-| Prisma schema         | `prisma/schema.prisma`                               | All 10 tables, anonymity contract enforced by structure |
-| NextAuth Google OAuth | `lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts` | No email stored — only Google `sub`                     |
-| Foundation libs       | `lib/db.ts`, `lib/redis.ts`, `lib/strings.ts`        | Singletons safe for Next.js dev/prod                    |
-| Seed data             | `prisma/seed.ts`                                     | 20 BD universities + departments                        |
-| CI pipeline           | `.github/workflows/ci.yml`                           | 4 jobs: quality → unit → integration → build            |
+| Feature               | Files                                                | Notes                                                                                                                                                 |
+| --------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prisma schema         | `prisma/schema.prisma`                               | All 10 tables, anonymity contract enforced by structure                                                                                               |
+| NextAuth Google OAuth | `lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts` | No email stored — only Google `sub`                                                                                                                   |
+| Foundation libs       | `lib/db.ts`, `lib/redis.ts`, `lib/strings.ts`        | Singletons safe for Next.js dev/prod                                                                                                                  |
+| Seed data             | `prisma/seed.ts`                                     | 161 Wikipedia-sourced BD universities (canonical acronyms + Bangla names + city); 15 with curated departments; idempotent heal-in-place + stale prune |
+| CI pipeline           | `.github/workflows/ci.yml`                           | 4 jobs: quality → unit → integration → build                                                                                                          |
 
 | Homepage with search | `app/page.tsx` | RSC with Redis-cached stats (60 s TTL) |
 | Universities listing | `app/universities/page.tsx` | ISR 5 min, grouped by type |
@@ -557,6 +581,9 @@ As features are completed, add them here for quick lookup.
 | Reports queue | `app/admin/reports/page.tsx` + `AdminReportActions` | Oldest-first; resolve keep / remove |
 | Admin moderation API | `app/api/admin/reviews/[id]/moderation/route.ts`, `app/api/admin/reports/[id]/resolve/route.ts`, `app/api/admin/professors/[id]/route.ts` | Zod-validated PATCH/POST, cache invalidation |
 | Integration test suite | `test/global-setup.integration.ts`, `test/setup.integration.ts`, `test/integration-helpers.ts`, `__tests__/integration/*.test.ts` | 25 DB-backed tests against the test Postgres; mocks Redis + NextAuth |
+| Professor search API | `app/api/professors/search/route.ts` | Scoped to uni+dept, pg_trgm fuzzy + ILIKE, joins `professor_courses` for review_count |
+| Professor typeahead picker | `components/review/ProfessorTypeahead.tsx` | Debounced (180 ms), abort-in-flight, opaque floating panel; dashed "Add 'xxxx' as a new professor" fallback row when no exact match |
+| Canonical BD university catalog | `prisma/seed.ts` | 161 Wikipedia-sourced entries with canonical acronyms + Bangla names + city; placeholder-rename + upsert + prune for idempotent re-seeds |
 
 ### Planned Features (from SRS)
 
