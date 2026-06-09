@@ -7,6 +7,7 @@ import { BN } from '@/lib/i18n/strings-bn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ProfessorTypeahead, type ProfessorSelection } from './ProfessorTypeahead'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,8 +68,13 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
   const [departmentId, setDepartmentId] = useState<number | ''>(
     preselectedProfessor?.departmentId ?? '',
   )
-  const [professorNameEn, setProfessorNameEn] = useState<string>(preselectedProfessor?.nameEn ?? '')
-  const [professorId] = useState<number | null>(preselectedProfessor?.id ?? null)
+  const [professorSelection, setProfessorSelection] = useState<ProfessorSelection | null>(
+    preselectedProfessor
+      ? { id: preselectedProfessor.id, name_en: preselectedProfessor.nameEn }
+      : null,
+  )
+  const professorId = professorSelection?.id ?? null
+  const professorNameEn = professorSelection?.name_en ?? ''
   const [courseCode, setCourseCode] = useState('')
   const [courseName, setCourseName] = useState('')
 
@@ -148,6 +154,11 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
       if (!universityId) return t.pickUni
       if (!departmentId) return t.pickDept
       if (!professorNameEn.trim()) return t.needName
+    } else if (!universityId || !departmentId) {
+      // Selecting an existing professor implies their uni/dept, but the form
+      // still needs both to resolve the course aggregate downstream.
+      if (!universityId) return t.pickUni
+      if (!departmentId) return t.pickDept
     }
     if (!courseName.trim()) return t.needCourse
     if (!teachingQuality) return t.needTeaching
@@ -249,6 +260,9 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
                   const v = e.target.value
                   setUniversityId(v ? Number(v) : '')
                   setDepartmentId('')
+                  // A professor is scoped to a (uni, dept) pair — invalidate
+                  // the selection when either changes.
+                  setProfessorSelection(null)
                 }}
                 className={selectClass}
                 required
@@ -265,7 +279,10 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
             <Field label={`${strings.review.selectDepartment} *`}>
               <select
                 value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : '')}
+                onChange={(e) => {
+                  setDepartmentId(e.target.value ? Number(e.target.value) : '')
+                  setProfessorSelection(null)
+                }}
                 disabled={!selectedUniversity}
                 className={selectClass}
                 required
@@ -279,16 +296,29 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
               </select>
             </Field>
 
-            <Field label={`${strings.review.teacherNameLabel} *`}>
-              <input
-                type="text"
-                value={professorNameEn}
-                onChange={(e) => setProfessorNameEn(e.target.value)}
-                placeholder="Dr. Mohammad Rahman"
-                className={inputClass}
-                required
+            {universityId && departmentId ? (
+              <ProfessorTypeahead
+                universityId={Number(universityId)}
+                departmentId={Number(departmentId)}
+                selection={professorSelection}
+                onSelect={setProfessorSelection}
+                onClear={() => setProfessorSelection(null)}
               />
-            </Field>
+            ) : (
+              <Field label={`${strings.review.teacherNameLabel} *`}>
+                <input
+                  type="text"
+                  value=""
+                  disabled
+                  placeholder={
+                    locale === 'en'
+                      ? 'Pick a university and department first'
+                      : 'প্রথমে বিশ্ববিদ্যালয় ও বিভাগ বেছে নিন'
+                  }
+                  className={inputClass}
+                />
+              </Field>
+            )}
           </>
         )}
 
