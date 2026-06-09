@@ -93,13 +93,22 @@ components:
           example: 'Computer Science & Engineering'
         name_bn:
           type: string
+          nullable: true
           example: 'কম্পিউটার সায়েন্স'
         short_name:
           type: string
+          nullable: true
           example: 'CSE'
         slug:
           type: string
+          nullable: true
           example: 'cse'
+        status:
+          type: string
+          enum: [verified, unverified]
+          description: |
+            `verified` for seed-curated rows and rows promoted by the admin
+            merge tool. `unverified` for rows auto-created by the review form.
         professor_count:
           type: integer
         review_count:
@@ -263,9 +272,27 @@ components:
 
     ReviewSubmitBody:
       type: object
+      description: |
+        Identifying the (university, department, professor) triple is hierarchical.
+        Each layer is either passed by id (already known) or by name (auto-create
+        on the server). Two valid shapes:
+
+        - **Known professor** — `professor_id` alone is enough. The professor's
+          uni + dept are looked up server-side.
+        - **New professor (and possibly new department)** — pass `university_id`
+          plus either `department_id` (existing dept) or `department_name_en`
+          (auto-create), plus `professor_name_en`.
+
+        `department_name_en` accepts any of:
+          - bare abbreviation: `"CSE"` (also dotted, e.g. `"C.S.E."`)
+          - full name: `"Computer Science and Engineering"`
+          - `"<ABBR> - <full name>"` (hyphen, en-dash, em-dash all accepted)
+          - `"<full name> (<ABBR>)"`
+
+        The server parses this into `short_name + name_en` and creates the row
+        with `status='unverified'`.
       required:
-        - professor_id
-        - course_code
+        - course_name
         - teaching_quality
         - grading_fairness
         - course_difficulty
@@ -274,12 +301,29 @@ components:
       properties:
         professor_id:
           type: integer
+          description: Optimisation hint when the existing professor is already known.
+        university_id:
+          type: integer
+          description: Required when `professor_id` is absent.
+        department_id:
+          type: integer
+          description: Either this OR `department_name_en` is required when `professor_id` is absent.
+        department_name_en:
+          type: string
+          description: Free-text department name; server-parsed into short_name + name_en.
+          example: 'CSE - Computer Science and Engineering'
+        professor_name_en:
+          type: string
+          description: Required when `professor_id` is absent.
+        professor_name_bn:
+          type: string
+          nullable: true
         course_code:
           type: string
           example: 'CSE 301'
         course_name:
           type: string
-          description: Required if course_code is not recognized in the system
+          description: Required; course is found-or-created in the resolved department
           example: 'Data Structures'
         teaching_quality:
           type: integer
@@ -392,6 +436,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /departments/search:
+    get:
+      tags: [Universities]
+      summary: Search departments (review-form typeahead)
+      description: |
+        Scoped fuzzy search used by the review form's department typeahead.
+        Returns the top matching departments inside a single university,
+        verified rows first.
+
+        With an empty `q` the endpoint returns the full department list for
+        the chosen university so the dropdown is useful on focus, not just
+        after typing.
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query — matched against short_name and name_en. Empty for full list.
+          example: 'CSE'
+        - name: university_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Required — narrows the search to one university.
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 8
+            maximum: 20
+      responses:
+        '200':
+          description: Department results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        slug: { type: string, nullable: true }
+                        name_en: { type: string }
+                        name_bn: { type: string, nullable: true }
+                        short_name: { type: string, nullable: true }
+                        status:
+                          type: string
+                          enum: [verified, unverified]
+                        professor_count: { type: integer }
 
   # ── Professors ───────────────────────────────────────────────
 
@@ -979,6 +1077,66 @@ paths:
       responses:
         '201':
           description: University created
+
+  /admin/departments/merge:
+    post:
+      tags: [Admin]
+      summary: Merge duplicate departments under one canonical row
+      description: |
+        Collapses several "duplicate" department rows (e.g. "CSE", "C.S.E.",
+        "Computer Science and Engineering") into one canonical target row.
+        All affected rows must belong to the same university.
+
+        In a single transaction:
+          1. Every source's `professors.department_id` and `courses.department_id`
+             is re-pointed to `target_id`.
+          2. The target row is marked `status='verified'`.
+          3. The source rows are deleted.
+
+        Cross-university merges are rejected. `target_id` must NOT appear in
+        `source_ids`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_id, source_ids]
+              properties:
+                target_id:
+                  type: integer
+                  description: The canonical row to keep. Marked verified after merge.
+                source_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: integer
+                  description: Rows to be repointed-then-deleted.
+      responses:
+        '200':
+          description: Merge completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  target:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      nameEn: { type: string }
+                  moved_professors: { type: integer }
+                  moved_courses: { type: integer }
+                  deleted_departments: { type: integer }
+        '400':
+          description: Validation failed (cross-university merge, target ∈ sources, etc.)
+        '401':
+          description: Admin authentication required
+        '404':
+          description: Target or one of the sources not found
 
   /admin/departments:
     post:

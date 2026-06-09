@@ -32,6 +32,11 @@ enum ProfessorStatus {
   unverified
 }
 
+enum DepartmentStatus {
+  verified
+  unverified
+}
+
 enum ModerationStatus {
   live
   soft_flagged
@@ -81,13 +86,14 @@ model University {
 }
 
 model Department {
-  id           Int      @id @default(autoincrement())
-  universityId Int      @map("university_id")
-  nameEn       String   @map("name_en") @db.VarChar(200)
-  nameBn       String?  @map("name_bn") @db.VarChar(200)
-  shortName    String?  @map("short_name") @db.VarChar(20)
-  slug         String?  @db.VarChar(50)
-  createdAt    DateTime @default(now()) @map("created_at")
+  id           Int              @id @default(autoincrement())
+  universityId Int              @map("university_id")
+  nameEn       String           @map("name_en") @db.VarChar(200)
+  nameBn       String?          @map("name_bn") @db.VarChar(200)
+  shortName    String?          @map("short_name") @db.VarChar(20)
+  slug         String?          @db.VarChar(50)
+  status       DepartmentStatus @default(unverified)
+  createdAt    DateTime         @default(now()) @map("created_at")
 
   university University @relation(fields: [universityId], references: [id])
   professors Professor[]

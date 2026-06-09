@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 interface DepartmentRow {
   id: number
@@ -11,6 +12,7 @@ interface DepartmentRow {
   nameBn: string | null
   shortName: string | null
   slug: string | null
+  status: 'verified' | 'unverified'
   professorCount: number
 }
 
@@ -25,6 +27,68 @@ export function DepartmentList({ universityId, departments }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+
+  // ── Merge mode state ─────────────────────────────────────────────────────
+  // Workflow: tick 2+ rows → pick one as the target → "Merge into target".
+  // The whole thing is transactional in the API; UI just collects intent.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [mergeTargetId, setMergeTargetId] = useState<number | null>(null)
+  const [merging, setMerging] = useState(false)
+  const [mergeError, setMergeError] = useState<string | null>(null)
+
+  function toggleSelected(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      // Keep the merge target consistent: clear it if it falls out of the set.
+      if (mergeTargetId !== null && !next.has(mergeTargetId)) {
+        setMergeTargetId(null)
+      }
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+    setMergeTargetId(null)
+    setMergeError(null)
+  }
+
+  const selectedDepts = useMemo(
+    () => departments.filter((d) => selectedIds.has(d.id)),
+    [departments, selectedIds],
+  )
+
+  async function performMerge() {
+    if (selectedIds.size < 2 || mergeTargetId === null) return
+    const sources = Array.from(selectedIds).filter((id) => id !== mergeTargetId)
+    if (sources.length === 0) return
+    setMergeError(null)
+    setMerging(true)
+    try {
+      const res = await fetch('/api/admin/departments/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_id: mergeTargetId, source_ids: sources }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        setMergeError(body.error ?? `Failed (${res.status})`)
+        return
+      }
+      clearSelection()
+      startTransition(() => router.refresh())
+    } catch (err) {
+      console.error(err)
+      setMergeError('Server error')
+    } finally {
+      setMerging(false)
+    }
+  }
 
   // ── Create form state ────────────────────────────────────────────────────
   const [newNameEn, setNewNameEn] = useState('')
@@ -113,6 +177,61 @@ export function DepartmentList({ universityId, departments }: Props) {
         </CardContent>
       </Card>
 
+      {/* Merge bar — appears when ≥ 2 rows are selected. */}
+      {selectedIds.size >= 2 ? (
+        <Card className="border-primary/60 bg-primary/5">
+          <CardContent className="space-y-3 py-4 text-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="font-semibold">Merge {selectedIds.size} departments into one</div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearSelection}
+                disabled={merging}
+              >
+                Cancel
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              All professors and courses from the other selected departments will be re-pointed to
+              the target row. The other rows will be deleted. The target row is marked as verified.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="merge-target" className="text-xs font-medium">
+                Keep as canonical:
+              </label>
+              <select
+                id="merge-target"
+                value={mergeTargetId ?? ''}
+                onChange={(e) => setMergeTargetId(e.target.value ? Number(e.target.value) : null)}
+                className={inputClass + ' max-w-md'}
+              >
+                <option value="">— pick one of the selected —</option>
+                {selectedDepts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.shortName ? `${d.shortName} — ${d.nameEn}` : d.nameEn}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                size="sm"
+                disabled={merging || mergeTargetId === null}
+                onClick={performMerge}
+              >
+                {merging ? '...' : 'Merge into target'}
+              </Button>
+            </div>
+            {mergeError ? (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {mergeError}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Existing departments */}
       {departments.length === 0 ? (
         <Card>
@@ -134,19 +253,33 @@ export function DepartmentList({ universityId, departments }: Props) {
                   }}
                 />
               ) : (
-                <Card>
+                <Card
+                  className={selectedIds.has(d.id) ? 'border-primary/60 bg-primary/5' : undefined}
+                >
                   <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
-                    <div>
-                      <div className="font-semibold">
-                        {d.shortName ?? d.nameEn}
-                        {d.shortName && d.nameEn !== d.shortName ? (
-                          <span className="ml-2 text-muted-foreground font-normal">
-                            — {d.nameEn}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {d.nameBn ? d.nameBn + ' · ' : ''}slug: {d.slug ?? '—'}
+                    <div className="flex min-w-0 items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(d.id)}
+                        onChange={() => toggleSelected(d.id)}
+                        aria-label={`Select ${d.shortName ?? d.nameEn} for merge`}
+                        className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-baseline gap-2 font-semibold">
+                          {d.shortName ?? d.nameEn}
+                          {d.shortName && d.nameEn !== d.shortName ? (
+                            <span className="text-muted-foreground font-normal">— {d.nameEn}</span>
+                          ) : null}
+                          {d.status === 'unverified' ? (
+                            <Badge variant="outline" className="text-amber-700 border-amber-300">
+                              Pending review
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {d.nameBn ? d.nameBn + ' · ' : ''}slug: {d.slug ?? '—'}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">

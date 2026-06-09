@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale, useStrings } from '@/lib/i18n/client'
 import { BN } from '@/lib/i18n/strings-bn'
@@ -8,20 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ProfessorTypeahead, type ProfessorSelection } from './ProfessorTypeahead'
+import { DepartmentTypeahead, type DepartmentSelection } from './DepartmentTypeahead'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Department {
-  id: number
-  nameEn: string
-  shortName: string | null
-}
 
 interface University {
   id: number
   nameEn: string
   shortName: string
-  departments: Department[]
 }
 
 interface PreselectedProfessor {
@@ -29,6 +23,7 @@ interface PreselectedProfessor {
   nameEn: string
   universityId: number
   departmentId: number
+  department: { nameEn: string; shortName: string | null } | null
 }
 
 interface Props {
@@ -65,8 +60,14 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
   const [universityId, setUniversityId] = useState<number | ''>(
     preselectedProfessor?.universityId ?? '',
   )
-  const [departmentId, setDepartmentId] = useState<number | ''>(
-    preselectedProfessor?.departmentId ?? '',
+  const [departmentSelection, setDepartmentSelection] = useState<DepartmentSelection | null>(
+    preselectedProfessor && preselectedProfessor.department
+      ? {
+          id: preselectedProfessor.departmentId,
+          name_en: preselectedProfessor.department.nameEn,
+          short_name: preselectedProfessor.department.shortName,
+        }
+      : null,
   )
   const [professorSelection, setProfessorSelection] = useState<ProfessorSelection | null>(
     preselectedProfessor
@@ -95,11 +96,6 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
   // Submission state
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const selectedUniversity = useMemo(
-    () => universities.find((u) => u.id === universityId) ?? null,
-    [universities, universityId],
-  )
 
   const ratingState: Record<string, [number, (v: number) => void]> = {
     teaching_quality: [teachingQuality, setTeachingQuality],
@@ -152,13 +148,13 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
   function validate(): string | null {
     if (!professorId) {
       if (!universityId) return t.pickUni
-      if (!departmentId) return t.pickDept
+      if (!departmentSelection) return t.pickDept
       if (!professorNameEn.trim()) return t.needName
-    } else if (!universityId || !departmentId) {
+    } else if (!universityId || !departmentSelection) {
       // Selecting an existing professor implies their uni/dept, but the form
       // still needs both to resolve the course aggregate downstream.
       if (!universityId) return t.pickUni
-      if (!departmentId) return t.pickDept
+      if (!departmentSelection) return t.pickDept
     }
     if (!courseName.trim()) return t.needCourse
     if (!teachingQuality) return t.needTeaching
@@ -183,12 +179,20 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
 
     setSubmitting(true)
     try {
+      // Department: if id is null the server auto-creates from
+      // department_name_en (smart-parsed into shortName + nameEn).
+      const departmentPayload = departmentSelection
+        ? departmentSelection.id
+          ? { department_id: departmentSelection.id }
+          : { department_name_en: departmentSelection.name_en }
+        : {}
+
       const payload = {
         ...(professorId
-          ? { professor_id: professorId }
+          ? { professor_id: professorId, ...departmentPayload }
           : {
               university_id: universityId || undefined,
-              department_id: departmentId || undefined,
+              ...departmentPayload,
               professor_name_en: professorNameEn.trim(),
             }),
         course_code: courseCode.trim() || undefined,
@@ -259,9 +263,10 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
                 onChange={(e) => {
                   const v = e.target.value
                   setUniversityId(v ? Number(v) : '')
-                  setDepartmentId('')
-                  // A professor is scoped to a (uni, dept) pair — invalidate
-                  // the selection when either changes.
+                  // A department is scoped to a university and a professor
+                  // is scoped to a (uni, dept) pair — invalidate both when
+                  // the university changes.
+                  setDepartmentSelection(null)
                   setProfessorSelection(null)
                 }}
                 className={selectClass}
@@ -276,30 +281,39 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
               </select>
             </Field>
 
-            <Field label={`${strings.review.selectDepartment} *`}>
-              <select
-                value={departmentId}
-                onChange={(e) => {
-                  setDepartmentId(e.target.value ? Number(e.target.value) : '')
+            {universityId ? (
+              <DepartmentTypeahead
+                universityId={Number(universityId)}
+                selection={departmentSelection}
+                onSelect={(s) => {
+                  setDepartmentSelection(s)
+                  // Switching dept invalidates the professor pick (they
+                  // were scoped to the old dept).
                   setProfessorSelection(null)
                 }}
-                disabled={!selectedUniversity}
-                className={selectClass}
-                required
-              >
-                <option value="">{t.pickOne}</option>
-                {selectedUniversity?.departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.shortName ?? d.nameEn}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                onClear={() => {
+                  setDepartmentSelection(null)
+                  setProfessorSelection(null)
+                }}
+              />
+            ) : (
+              <Field label={`${strings.review.selectDepartment} *`}>
+                <input
+                  type="text"
+                  value=""
+                  disabled
+                  placeholder={
+                    locale === 'en' ? 'Pick a university first' : 'প্রথমে বিশ্ববিদ্যালয় বেছে নিন'
+                  }
+                  className={inputClass}
+                />
+              </Field>
+            )}
 
-            {universityId && departmentId ? (
+            {universityId && departmentSelection?.id ? (
               <ProfessorTypeahead
                 universityId={Number(universityId)}
-                departmentId={Number(departmentId)}
+                departmentId={departmentSelection.id}
                 selection={professorSelection}
                 onSelect={setProfessorSelection}
                 onClear={() => setProfessorSelection(null)}
@@ -308,15 +322,38 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
               <Field label={`${strings.review.teacherNameLabel} *`}>
                 <input
                   type="text"
-                  value=""
-                  disabled
+                  value={professorNameEn}
+                  onChange={(e) =>
+                    setProfessorSelection({
+                      id: null,
+                      name_en: e.target.value,
+                    })
+                  }
+                  disabled={!universityId || !departmentSelection}
                   placeholder={
-                    locale === 'en'
-                      ? 'Pick a university and department first'
-                      : 'প্রথমে বিশ্ববিদ্যালয় ও বিভাগ বেছে নিন'
+                    !universityId
+                      ? locale === 'en'
+                        ? 'Pick a university first'
+                        : 'প্রথমে বিশ্ববিদ্যালয় বেছে নিন'
+                      : !departmentSelection
+                        ? locale === 'en'
+                          ? 'Pick a department first'
+                          : 'প্রথমে বিভাগ বেছে নিন'
+                        : 'Dr. Mohammad Rahman'
                   }
                   className={inputClass}
                 />
+                {!departmentSelection?.id && departmentSelection ? (
+                  // When the dept is a new (unsaved) one, we can't typeahead
+                  // for professors — there's no dept_id to scope by yet.
+                  // Allow a free-text professor name instead. The /api/reviews
+                  // handler still auto-creates the professor row on submit.
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {locale === 'en'
+                      ? "New department — type the professor's name freely; we'll create them on submit."
+                      : 'নতুন বিভাগ — শিক্ষকের নাম লিখুন; সাবমিট করলে তৈরি হবে।'}
+                  </p>
+                ) : null}
               </Field>
             )}
           </>

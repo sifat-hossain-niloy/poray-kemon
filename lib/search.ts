@@ -72,10 +72,12 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
     SELECT 'department' AS kind,
            d.id,
            CONCAT(u.slug, '/', d.slug) AS slug,
-           CONCAT(u.short_name, ' · ', d.short_name) AS title,
+           -- Prefer the abbreviation when present (more recognisable),
+           -- fall back to the full name when the dept has no short_name.
+           CONCAT(u.short_name, ' · ', COALESCE(d.short_name, d.name_en)) AS title,
            d.name_en AS subtitle,
            GREATEST(
-             similarity(d.short_name, ${q}),
+             COALESCE(similarity(d.short_name, ${q}), 0),
              similarity(d.name_en, ${q})
            )::float AS score
       FROM departments d
@@ -83,7 +85,7 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
      WHERE d.short_name ILIKE ${ilikePattern}
         OR d.name_en   ILIKE ${ilikePattern}
         OR similarity(d.name_en, ${q})   > 0.3
-        OR similarity(d.short_name, ${q}) > 0.3
+        OR COALESCE(similarity(d.short_name, ${q}), 0) > 0.3
 
     UNION ALL
 

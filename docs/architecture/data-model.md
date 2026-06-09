@@ -54,17 +54,20 @@ admin_users (separate auth system)
 
 ### `departments`
 
-| Column          | Type           | Constraints       | Notes                            |
-| --------------- | -------------- | ----------------- | -------------------------------- |
-| `id`            | `SERIAL`       | PK                |                                  |
-| `university_id` | `INTEGER`      | FK → universities |                                  |
-| `name_en`       | `VARCHAR(200)` | NOT NULL          | "Computer Science & Engineering" |
-| `name_bn`       | `VARCHAR(200)` |                   |                                  |
-| `short_name`    | `VARCHAR(20)`  |                   | "CSE"                            |
-| `slug`          | `VARCHAR(50)`  |                   | "cse"                            |
-| `created_at`    | `TIMESTAMP`    | DEFAULT NOW()     |                                  |
+| Column          | Type           | Constraints          | Notes                                                                                                         |
+| --------------- | -------------- | -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `id`            | `SERIAL`       | PK                   |                                                                                                               |
+| `university_id` | `INTEGER`      | FK → universities    |                                                                                                               |
+| `name_en`       | `VARCHAR(200)` | NOT NULL             | "Computer Science & Engineering"                                                                              |
+| `name_bn`       | `VARCHAR(200)` |                      |                                                                                                               |
+| `short_name`    | `VARCHAR(20)`  |                      | "CSE"                                                                                                         |
+| `slug`          | `VARCHAR(50)`  |                      | "cse"                                                                                                         |
+| `status`        | `ENUM`         | DEFAULT 'unverified' | `verified \| unverified`. Seed-curated rows are verified. Anything created via the review form is unverified. |
+| `created_at`    | `TIMESTAMP`    | DEFAULT NOW()        |                                                                                                               |
 
 **Unique constraint:** `(university_id, short_name)`, `(university_id, slug)`
+
+Departments are created in two ways: (a) by the seed, with `status='verified'`; (b) by the review submission flow when a user types a new department in the review form's typeahead. The auto-create branch (b) parses `"CSE - Computer Science and Engineering"` style input via `lib/department-parser.ts` and stores `status='unverified'`. Duplicates that survive ("CSE" + "C.S.E." + "Computer Science and Engineering" as three rows) can be collapsed by an admin via `POST /api/admin/departments/merge` — a single transaction that repoints `professors.department_id` + `courses.department_id`, marks the target verified, and deletes the source rows.
 
 ---
 
