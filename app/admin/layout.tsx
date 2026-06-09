@@ -44,6 +44,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               >
                 {STRINGS.admin.reports}
               </Link>
+              <Link
+                href="/admin/universities"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Universities
+              </Link>
             </nav>
             <form action="/api/admin/logout" method="POST">
               <button
