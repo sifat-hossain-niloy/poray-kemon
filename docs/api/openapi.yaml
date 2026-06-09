@@ -398,42 +398,45 @@ paths:
   /professors/search:
     get:
       tags: [Professors]
-      summary: Search professors
+      summary: Search professors (review-form typeahead)
       description: |
-        Full-text + fuzzy search across professor names, departments, and universities.
-        Uses PostgreSQL `pg_trgm` for typo-tolerant matching.
+        Scoped fuzzy search used by the review form's professor typeahead.
+        Returns the top matching professors inside a specific university +
+        department, including each one's running `review_count`.
+
+        Uses PostgreSQL `pg_trgm` similarity plus `ILIKE` substring matching
+        so short queries like "rah" still surface "Rahman". Public — no
+        auth, no tracking (anonymity-safe).
       parameters:
         - name: q
           in: query
           required: true
           schema:
             type: string
-            minLength: 2
-          description: Search query
+            minLength: 1
+          description: Search query (≥ 1 character; ≥ 3 is when fuzzy ranking kicks in)
           example: 'Rahman'
-        - name: university
+        - name: university_id
           in: query
+          required: true
           schema:
-            type: string
-          description: Filter by university slug
-          example: 'nsu'
-        - name: department
+            type: integer
+          description: University primary key — required, narrows the search to this institution
+          example: 1
+        - name: department_id
           in: query
+          required: true
           schema:
-            type: string
-          description: Filter by department slug
-          example: 'cse'
-        - name: page
+            type: integer
+          description: Department primary key — required, narrows further to this department
+          example: 3
+        - name: limit
           in: query
           schema:
             type: integer
-            default: 1
-        - name: per_page
-          in: query
-          schema:
-            type: integer
-            default: 20
-            maximum: 50
+            default: 8
+            maximum: 20
+          description: Max results returned
       responses:
         '200':
           description: Search results
@@ -445,13 +448,14 @@ paths:
                   results:
                     type: array
                     items:
-                      $ref: '#/components/schemas/ProfessorSummary'
-                  total:
-                    type: integer
-                  page:
-                    type: integer
-                  per_page:
-                    type: integer
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        slug: { type: string }
+                        name_en: { type: string }
+                        name_bn: { type: string, nullable: true }
+                        designation: { type: string, nullable: true }
+                        review_count: { type: integer }
 
   /professors/{slug}:
     get:
