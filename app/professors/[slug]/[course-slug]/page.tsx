@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ReviewCard } from '@/components/review/ReviewCard'
-import { STRINGS } from '@/lib/strings'
+import { getLocale, getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +53,10 @@ function parsePage(raw: string | undefined): number {
 }
 
 export default async function ProfessorCoursePage({ params, searchParams }: PageProps) {
+  const [strings, locale] = await Promise.all([getStrings(), getLocale()])
+  const breadcrumbUni = locale === 'en' ? 'Universities' : 'বিশ্ববিদ্যালয়'
+  const prevLabel = locale === 'en' ? '← Previous' : '← আগের'
+  const nextLabel = locale === 'en' ? 'Next →' : 'পরের →'
   const { slug, 'course-slug': courseSlug } = await params
   const { sort: sortRaw, page: pageRaw } = await searchParams
   const sort = parseSort(sortRaw)
@@ -125,7 +129,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
       <div className="mb-6 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Link href="/universities" className="text-muted-foreground hover:text-foreground">
-            বিশ্ববিদ্যালয়
+            {breadcrumbUni}
           </Link>
           <span className="text-muted-foreground">›</span>
           <Link
@@ -144,7 +148,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
           {professorCourse.course.courseName}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {STRINGS.professor.reviewCount(totalReviews)} · {professor.nameBn ?? professor.nameEn}
+          {strings.professor.reviewCount(totalReviews)} · {professor.nameBn ?? professor.nameEn}
         </p>
       </div>
 
@@ -152,10 +156,10 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
       <Card className="mb-6">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <CardTitle className="text-base">{STRINGS.professor.overallScore}</CardTitle>
+            <CardTitle className="text-base">{strings.professor.overallScore}</CardTitle>
             {professorCourse.wouldRecommendPct !== null ? (
               <Badge variant="secondary">
-                {STRINGS.professor.wouldRecommendPercent(
+                {strings.professor.wouldRecommendPercent(
                   Math.round(Number(professorCourse.wouldRecommendPct.toString())),
                 )}
               </Badge>
@@ -164,28 +168,28 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <Stat
-            label={STRINGS.ratings.teachingQuality}
+            label={strings.ratings.teachingQuality}
             value={professorCourse.avgTeachingQuality}
           />
           <Stat
-            label={STRINGS.ratings.gradingFairness}
+            label={strings.ratings.gradingFairness}
             value={professorCourse.avgGradingFairness}
           />
           <Stat
-            label={STRINGS.ratings.courseDifficulty}
+            label={strings.ratings.courseDifficulty}
             value={professorCourse.avgCourseDifficulty}
           />
-          <Stat label={STRINGS.ratings.attendance} value={professorCourse.avgAttendance} />
+          <Stat label={strings.ratings.attendance} value={professorCourse.avgAttendance} />
         </CardContent>
       </Card>
 
       {/* ── Sort tabs ────────────────────────────────────────────────────── */}
       <div className="mb-4 flex items-center gap-2">
         <SortLink href={pageHref(1, 'helpful')} active={sort === 'helpful'}>
-          {STRINGS.reviewDisplay.sortByHelpful}
+          {strings.reviewDisplay.sortByHelpful}
         </SortLink>
         <SortLink href={pageHref(1, 'recent')} active={sort === 'recent'}>
-          {STRINGS.reviewDisplay.sortByRecent}
+          {strings.reviewDisplay.sortByRecent}
         </SortLink>
         <div className="ml-auto">
           <Button
@@ -193,7 +197,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
             variant="outline"
             size="sm"
           >
-            {STRINGS.professor.writeReview}
+            {strings.professor.writeReview}
           </Button>
         </div>
       </div>
@@ -202,7 +206,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
       {reviews.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            {STRINGS.reviewDisplay.noReviews}
+            {strings.reviewDisplay.noReviews}
           </CardContent>
         </Card>
       ) : (
@@ -238,26 +242,27 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
               href={pageHref(page - 1)}
               className="rounded-md border border-border bg-card px-3 py-1.5 transition-colors hover:bg-muted"
             >
-              ← আগের
+              {prevLabel}
             </Link>
           ) : (
             <span className="rounded-md border border-border bg-muted/40 px-3 py-1.5 text-muted-foreground/50">
-              ← আগের
+              {prevLabel}
             </span>
           )}
           <span className="px-2 text-muted-foreground tabular-nums">
-            {page.toLocaleString('bn-BD')} / {totalPages.toLocaleString('bn-BD')}
+            {page.toLocaleString(locale === 'en' ? 'en-US' : 'bn-BD')} /{' '}
+            {totalPages.toLocaleString(locale === 'en' ? 'en-US' : 'bn-BD')}
           </span>
           {page < totalPages ? (
             <Link
               href={pageHref(page + 1)}
               className="rounded-md border border-border bg-card px-3 py-1.5 transition-colors hover:bg-muted"
             >
-              পরের →
+              {nextLabel}
             </Link>
           ) : (
             <span className="rounded-md border border-border bg-muted/40 px-3 py-1.5 text-muted-foreground/50">
-              পরের →
+              {nextLabel}
             </span>
           )}
         </nav>

@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { STRINGS } from '@/lib/strings'
+import { getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +68,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json(
-      { error: STRINGS.errors.unauthorized, code: 'UNAUTHENTICATED' },
+      { error: (await getStrings()).errors.unauthorized, code: 'UNAUTHENTICATED' },
       { status: 401 },
     )
   }
@@ -130,6 +130,6 @@ export async function POST(_req: Request, ctx: RouteContext) {
       })
     }
     console.error('[reviews/:id/helpful] failed:', err)
-    return NextResponse.json({ error: STRINGS.errors.serverError }, { status: 500 })
+    return NextResponse.json({ error: (await getStrings()).errors.serverError }, { status: 500 })
   }
 }

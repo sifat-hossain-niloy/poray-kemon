@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { STRINGS } from '@/lib/strings'
+import { useLocale, useStrings } from '@/lib/i18n/client'
 import { REPORT_REASONS } from '@/lib/reports'
 
 interface Props {
@@ -12,9 +12,10 @@ interface Props {
 
 type Reason = (typeof REPORT_REASONS)[number]
 
-const REASON_LABELS = STRINGS.report.reasons satisfies Record<Reason, string>
-
 export function ReportButton({ reviewId }: Props) {
+  const strings = useStrings()
+  const locale = useLocale()
+  const REASON_LABELS = strings.report.reasons satisfies Record<Reason, string>
   const { status } = useSession()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [reason, setReason] = useState<Reason | ''>('')
@@ -54,7 +55,7 @@ export function ReportButton({ reviewId }: Props) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!reason) {
-      setError('একটি কারণ বেছে নিন')
+      setError(locale === 'en' ? 'Pick a reason' : 'একটি কারণ বেছে নিন')
       return
     }
     setSubmitting(true)
@@ -80,13 +81,13 @@ export function ReportButton({ reviewId }: Props) {
           void signIn('google')
           return
         }
-        setError(body.error ?? 'রিপোর্ট ব্যর্থ হয়েছে')
+        setError(body.error ?? (locale === 'en' ? 'Report failed' : 'রিপোর্ট ব্যর্থ হয়েছে'))
         return
       }
       setDone(true)
     } catch (err) {
       console.error(err)
-      setError(STRINGS.errors.serverError)
+      setError(strings.errors.serverError)
     } finally {
       setSubmitting(false)
     }
@@ -100,7 +101,7 @@ export function ReportButton({ reviewId }: Props) {
         className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
       >
         <FlagIcon />
-        {STRINGS.reviewDisplay.report}
+        {strings.reviewDisplay.report}
       </button>
 
       <dialog
@@ -109,23 +110,25 @@ export function ReportButton({ reviewId }: Props) {
       >
         {done ? (
           <div className="space-y-4 p-6 text-center">
-            <h2 className="text-lg font-semibold">{STRINGS.report.success}</h2>
+            <h2 className="text-lg font-semibold">{strings.report.success}</h2>
             <Button type="button" onClick={close}>
-              বন্ধ করুন
+              {locale === 'en' ? 'Close' : 'বন্ধ করুন'}
             </Button>
           </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-4 p-6">
             <header>
-              <h2 className="text-lg font-semibold">{STRINGS.report.title}</h2>
+              <h2 className="text-lg font-semibold">{strings.report.title}</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                আপনার রিপোর্ট অ্যাডমিন পর্যালোচনা করবেন।
+                {locale === 'en'
+                  ? 'An admin will review your report.'
+                  : 'আপনার রিপোর্ট অ্যাডমিন পর্যালোচনা করবেন।'}
               </p>
             </header>
 
             {/* Reason — radio group */}
             <fieldset className="space-y-2">
-              <legend className="sr-only">কারণ</legend>
+              <legend className="sr-only">{locale === 'en' ? 'Reason' : 'কারণ'}</legend>
               {REPORT_REASONS.map((r) => (
                 <label
                   key={r}
@@ -151,7 +154,9 @@ export function ReportButton({ reviewId }: Props) {
 
             {/* Optional details */}
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium">আরও কিছু বলবেন? (ঐচ্ছিক)</span>
+              <span className="text-sm font-medium">
+                {locale === 'en' ? 'Anything to add? (optional)' : 'আরও কিছু বলবেন? (ঐচ্ছিক)'}
+              </span>
               <textarea
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
@@ -170,10 +175,14 @@ export function ReportButton({ reviewId }: Props) {
             {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button type="button" variant="ghost" onClick={close} className="flex-1">
-                বাতিল
+                {locale === 'en' ? 'Cancel' : 'বাতিল'}
               </Button>
               <Button type="submit" disabled={submitting} className="flex-1">
-                {submitting ? '...জমা দিচ্ছি' : STRINGS.report.submitButton}
+                {submitting
+                  ? locale === 'en'
+                    ? 'Submitting…'
+                    : '...জমা দিচ্ছি'
+                  : strings.report.submitButton}
               </Button>
             </div>
           </form>

@@ -27,7 +27,7 @@ import { reviewSubmitSchema } from '@/lib/validations/review'
 import { moderate } from '@/lib/moderation'
 import { professorSlug, courseSlug } from '@/lib/slug'
 import { deleteCache, CACHE_KEYS } from '@/lib/redis'
-import { STRINGS } from '@/lib/strings'
+import { getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
 
@@ -150,7 +150,7 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json(
-      { error: STRINGS.errors.unauthorized, code: 'UNAUTHENTICATED' },
+      { error: (await getStrings()).errors.unauthorized, code: 'UNAUTHENTICATED' },
       { status: 401 },
     )
   }
@@ -289,7 +289,7 @@ export async function POST(req: Request) {
     if (err instanceof DuplicateSubmissionError) {
       return NextResponse.json(
         {
-          error: STRINGS.reviewResponse.alreadyReviewed,
+          error: (await getStrings()).reviewResponse.alreadyReviewed,
           code: 'ALREADY_REVIEWED',
         },
         { status: 409 },
@@ -300,12 +300,12 @@ export async function POST(req: Request) {
       err.code === 'P2002' // unique constraint
     ) {
       return NextResponse.json(
-        { error: STRINGS.reviewResponse.alreadyReviewed, code: 'ALREADY_REVIEWED' },
+        { error: (await getStrings()).reviewResponse.alreadyReviewed, code: 'ALREADY_REVIEWED' },
         { status: 409 },
       )
     }
     console.error('[reviews/POST] transaction failed:', err)
-    return NextResponse.json({ error: STRINGS.errors.serverError }, { status: 500 })
+    return NextResponse.json({ error: (await getStrings()).errors.serverError }, { status: 500 })
   }
 
   // ── 6. Cache invalidation ─────────────────────────────────────────────────
@@ -317,7 +317,7 @@ export async function POST(req: Request) {
   // ── 7. Done ───────────────────────────────────────────────────────────────
   return NextResponse.json(
     {
-      message: STRINGS.reviewResponse.success,
+      message: (await getStrings()).reviewResponse.success,
       professor_slug: professor.slug,
       moderation_status: verdict.kind === 'soft_flag' ? 'soft_flagged' : 'live',
     },
