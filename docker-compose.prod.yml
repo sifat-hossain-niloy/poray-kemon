@@ -1,0 +1,141 @@
+name: poraykemon-prod
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Production stack:
+#   - nginx       : reverse proxy / TLS / rate limiting
+#   - nextjs      : the app (built from ./Dockerfile)
+#   - postgres    : PostgreSQL 16
+#   - redis       : sessions + cache + dedup
+#   - umami       : self-hosted analytics (optional)
+#
+# Secrets come from the host's .env.production file (NEVER committed).
+# Persistent state is in named volumes — do NOT use `docker compose down -v`
+# in production unless you intend to wipe data.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: poraykemon_nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot_etc:/etc/letsencrypt:ro
+      - certbot_var:/var/lib/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      nextjs:
+        condition: service_healthy
+
+  certbot:
+    # Issue / renew Let's Encrypt certificates. Run `docker compose run --rm
+    # certbot certonly --webroot -w /var/www/certbot -d poraykemon.com
+    # -d www.poraykemon.com` once to bootstrap, then crontab the renew.
+    image: certbot/certbot:latest
+    container_name: poraykemon_certbot
+    volumes:
+      - certbot_etc:/etc/letsencrypt
+      - certbot_var:/var/lib/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint:
+      [
+        '/bin/sh',
+        '-c',
+        'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done',
+      ]
+
+  nextjs:
+    image: ghcr.io/sifat-hossain-niloy/poray-kemon:${IMAGE_TAG:-latest}
+    # Or build locally: `docker compose -f docker-compose.prod.yml build nextjs`
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: poraykemon_nextjs
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-poraykemon}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-poraykemon}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: poraykemon_postgres_prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-poraykemon}
+      POSTGRES_DB: ${POSTGRES_DB:-poraykemon}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER:-poraykemon} -d $${POSTGRES_DB:-poraykemon}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Do NOT publish port 5432 to the host in production — Postgres is
+    # reachable only from the internal Docker network.
+
+  redis:
+    image: redis:7-alpine
+    container_name: poraykemon_redis_prod
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: poraykemon_umami_prod
+    restart: unless-stopped
+    profiles: [analytics] # opt-in: `docker compose --profile analytics up -d`
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-poraykemon}:${POSTGRES_PASSWORD}@postgres:5432/umami
+      DATABASE_TYPE: postgresql
+      APP_SECRET: ${UMAMI_APP_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  certbot_etc:
+    driver: local
+  certbot_var:
+    driver: local
+  certbot_www:
+    driver: local
+  nginx_logs:
+    driver: local
