@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Language toggle live (bn ↔ en) + auth fix for /review/new
-**Last updated:** June 2026 (Session 9)
-**Active branches:** `fix/auth-google-sub` and `feat/i18n-toggle` (both PRs open)
+**Phase:** Department typeahead + admin merge tool
+**Last updated:** June 2026 (Session 10)
+**Active branches:** `feat/department-typeahead-with-add` (PR open, depends on the professor-typeahead and seed PRs)
 
 ---
 
@@ -143,6 +143,19 @@
 - [x] Legacy `STRINGS` re-export in `lib/strings.ts` kept for the rest of the app
       — progressive migration; other pages stay Bangla-only for now
 
+### Session 10 — department typeahead + admin merge tool (`feat/department-typeahead-with-add`)
+
+- [x] `DepartmentStatus` enum + migration `20260609193125_add_department_status`. Seed-curated rows flip to `verified`; user-created rows default to `unverified`.
+- [x] `GET /api/departments/search?q=&university_id=` — pg_trgm + ILIKE search; empty-query returns the full uni dept list; verified rows ranked first.
+- [x] `components/review/DepartmentTypeahead.tsx` — same opaque debounced/floating-panel pattern as `ProfessorTypeahead`; amber "Pending review" badge on unverified hits; dashed "Add 'xxxx' as a new department" fallback row.
+- [x] `lib/department-parser.ts` (pure, 10 unit tests) — parses `"CSE - Computer Science and Engineering"`, `"Computer Science and Engineering (CSE)"`, bare `"CSE"`, `"C.S.E."`, or any full-name string into `{shortName, nameEn}`.
+- [x] `resolveDepartment` in `app/api/reviews/route.ts` — runs before `resolveProfessor`. Case-insensitive find-or-create within the university; non-colliding slug; falls back to null `shortName` if a casing collision sneaks through.
+- [x] `ReviewForm.tsx` rewired: the dept `<select>` is gone; a free-text professor input is shown when the dept is a new (unsaved) one (no `department_id` to typeahead-scope by).
+- [x] `POST /api/admin/departments/merge` — transactional: sanity-check shared-university, repoint `professors.department_id` + `courses.department_id`, mark target verified, delete sources. Cross-uni and `target ∈ sources` rejected.
+- [x] `app/admin/universities/[id]/DepartmentList.tsx` — checkbox column + merge banner that appears when ≥2 rows selected. "Pending review" badge on unverified rows.
+- [x] `lib/search.ts` dept branch uses `COALESCE(d.short_name, d.name_en)` so user-created rows with null shortName don't render as `"BUET · null"`.
+- [x] All 25 integration tests + 65 unit tests still pass.
+
 ---
 
 ## What We Are Building Next
@@ -153,11 +166,6 @@ After this PR is merged, the next steps from SRS are:
 
 Static content; explains the anonymity contract for end-users.
 New branch: `feat/about-page`.
-
-### Step 2 — Admin: add/edit universities + departments
-
-Currently universities/departments live only in seed. Add CRUD pages.
-New branch: `feat/admin-universities`.
 
 ---
 

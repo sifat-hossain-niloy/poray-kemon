@@ -54,23 +54,25 @@ export default async function NewReviewPage({ searchParams }: PageProps) {
     )
   }
 
+  // Departments are no longer fetched here — the form's DepartmentTypeahead
+  // hits /api/departments/search on demand. We only need the university list
+  // for the dropdown and, when preselected, the department's name fields so
+  // the picker can show a locked-in card.
   const [universities, preselected] = await Promise.all([
     db.university.findMany({
       orderBy: { shortName: 'asc' },
-      select: {
-        id: true,
-        nameEn: true,
-        shortName: true,
-        departments: {
-          orderBy: { shortName: 'asc' },
-          select: { id: true, nameEn: true, shortName: true },
-        },
-      },
+      select: { id: true, nameEn: true, shortName: true },
     }),
     preselectSlug
       ? db.professor.findUnique({
           where: { slug: preselectSlug },
-          select: { id: true, nameEn: true, universityId: true, departmentId: true },
+          select: {
+            id: true,
+            nameEn: true,
+            universityId: true,
+            departmentId: true,
+            department: { select: { nameEn: true, shortName: true } },
+          },
         })
       : Promise.resolve(null),
   ])

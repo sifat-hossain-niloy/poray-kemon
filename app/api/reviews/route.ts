@@ -25,11 +25,103 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { reviewSubmitSchema } from '@/lib/validations/review'
 import { moderate } from '@/lib/moderation'
-import { professorSlug, courseSlug } from '@/lib/slug'
+import { professorSlug, courseSlug, slugify } from '@/lib/slug'
+import { parseDepartmentName } from '@/lib/department-parser'
 import { deleteCache, CACHE_KEYS } from '@/lib/redis'
 import { getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
+
+// ── Helper: find or create the Department row ────────────────────────────────
+//
+// Either `departmentId` is supplied (already known) or `nameInput` is — in
+// which case we parse "CSE - Computer Science and Engineering" style inputs
+// into `shortName + nameEn` and find-or-create the row.
+//
+// Find logic is case-insensitive on shortName AND nameEn so a user typing
+// "CSE" after "Cse" was just created surfaces the same row.
+
+async function resolveDepartment(input: {
+  universityId: number
+  departmentId?: number
+  nameInput?: string
+}): Promise<{ id: number; nameEn: string; shortName: string | null } | null> {
+  if (input.departmentId) {
+    return db.department.findUnique({
+      where: { id: input.departmentId },
+      select: { id: true, nameEn: true, shortName: true },
+    })
+  }
+
+  if (!input.nameInput) return null
+  const parsed = parseDepartmentName(input.nameInput)
+  if (parsed.nameEn.length < 2) return null
+
+  // Case-insensitive find — match either short_name or name_en within the
+  // chosen university. If two stale rows exist (e.g. "CSE" and "Computer
+  // Science and Engineering") we pick the verified one first, then by id.
+  const existing = await db.department.findFirst({
+    where: {
+      universityId: input.universityId,
+      OR: [
+        ...(parsed.shortName
+          ? [{ shortName: { equals: parsed.shortName, mode: 'insensitive' as const } }]
+          : []),
+        { nameEn: { equals: parsed.nameEn, mode: 'insensitive' as const } },
+      ],
+    },
+    orderBy: [{ status: 'asc' }, { id: 'asc' }],
+    select: { id: true, nameEn: true, shortName: true },
+  })
+  if (existing) return existing
+
+  // Pick a non-colliding slug. Prefer the shortName slug, fall back to a
+  // name-derived slug, then append a numeric suffix on collision. The unique
+  // constraint is (university_id, slug), so collisions are uni-scoped.
+  const baseSlug = parsed.shortName
+    ? slugify(parsed.shortName).slice(0, 50)
+    : slugify(parsed.nameEn).slice(0, 50)
+  let candidateSlug = baseSlug || 'department'
+  let n = 2
+  while (true) {
+    const collides = await db.department.findUnique({
+      where: { universityId_slug: { universityId: input.universityId, slug: candidateSlug } },
+      select: { id: true },
+    })
+    if (!collides) break
+    candidateSlug = `${baseSlug}-${n}`.slice(0, 50)
+    n += 1
+    if (n > 50) return null
+  }
+
+  // shortName has its own uni-scoped unique constraint. Null is allowed and
+  // doesn't conflict. If a collision exists (rare — different casing of the
+  // same abbreviation slipped through the find above), fall back to nameEn
+  // only and let the admin merge tool sort it out later.
+  let shortName: string | null = parsed.shortName
+  if (shortName) {
+    const collides = await db.department.findUnique({
+      where: {
+        universityId_shortName: { universityId: input.universityId, shortName },
+      },
+      select: { id: true },
+    })
+    if (collides) shortName = null
+  }
+
+  return db.department.create({
+    data: {
+      universityId: input.universityId,
+      nameEn: parsed.nameEn,
+      shortName,
+      slug: candidateSlug,
+      // Anything created via the review form is unverified — surfaces in the
+      // admin merge tool so duplicates can be collapsed.
+      status: 'unverified',
+    },
+    select: { id: true, nameEn: true, shortName: true },
+  })
+}
 
 // ── Helper: find or create the Professor row ─────────────────────────────────
 
@@ -182,11 +274,37 @@ export async function POST(req: Request) {
     )
   }
 
-  // ── 4. Resolve professor + course + professor_course ──────────────────────
+  // ── 4. Resolve department → professor → course → professor_course ────────
+  //
+  // We resolve the department first because the professor's row needs a
+  // department_id. When `professor_id` is given the department is implied
+  // by the existing professor row, so we skip dept resolution entirely.
+  let resolvedDeptId: number | undefined = data.department_id
+  if (!data.professor_id) {
+    if (!data.university_id) {
+      return NextResponse.json(
+        { error: 'university_id is required', code: 'BAD_REQUEST' },
+        { status: 400 },
+      )
+    }
+    const dept = await resolveDepartment({
+      universityId: data.university_id,
+      departmentId: data.department_id,
+      nameInput: data.department_name_en,
+    })
+    if (!dept) {
+      return NextResponse.json(
+        { error: 'Could not resolve department', code: 'DEPARTMENT_RESOLVE_FAILED' },
+        { status: 400 },
+      )
+    }
+    resolvedDeptId = dept.id
+  }
+
   const professor = await resolveProfessor({
     professorId: data.professor_id,
     universityId: data.university_id,
-    departmentId: data.department_id,
+    departmentId: resolvedDeptId,
     nameEn: data.professor_name_en,
     nameBn: data.professor_name_bn || undefined,
   })

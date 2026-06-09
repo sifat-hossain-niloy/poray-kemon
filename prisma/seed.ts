@@ -247,6 +247,9 @@ async function main() {
     })
 
     for (const dept of departments) {
+      // Seed-curated departments are trusted, so flip status to verified —
+      // departments created by users via the review form default to
+      // unverified and surface in the admin merge tool.
       await db.department.upsert({
         where: {
           universityId_shortName: {
@@ -254,8 +257,8 @@ async function main() {
             shortName: dept.shortName,
           },
         },
-        create: { ...dept, universityId: university.id },
-        update: {},
+        create: { ...dept, universityId: university.id, status: 'verified' },
+        update: { status: 'verified' },
       })
     }
 

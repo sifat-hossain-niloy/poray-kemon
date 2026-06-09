@@ -85,6 +85,7 @@ export default async function AdminUniversityDetailPage({ params }: PageProps) {
             nameBn: d.nameBn,
             shortName: d.shortName,
             slug: d.slug,
+            status: d.status,
             professorCount: d._count.professors,
           }))}
         />

@@ -3,13 +3,21 @@ import { z } from 'zod'
 // ─────────────────────────────────────────────────────────────────────────────
 // Review submission schema
 //
-// We always require university_id + department_id + professor_name_en. The
-// API does a find-or-create on (university_id, department_id, name_en) so a
-// reviewer can submit for a brand-new professor without a separate flow.
+// Identifying the (uni, dept, professor) triple is hierarchical. Each layer
+// can be passed in by id (already known) or by name (auto-create on the
+// server). The handler runs three find-or-create steps in order:
 //
-// professor_id is accepted only as an optimisation hint — when the client
-// already knows the existing record id (e.g. coming from a professor page),
-// the lookup is skipped.
+//   1. department — needs university_id + (department_id OR department_name_en)
+//   2. professor  — needs university_id + dept (from step 1) + (professor_id OR professor_name_en)
+//   3. course     — needs dept (from step 1) + course_name
+//
+// Auto-created departments are stored with status='unverified' and surface
+// in the admin merge tool. Auto-created professors stay status='unverified'
+// (existing behaviour).
+//
+// professor_id and department_id are optimisation hints — when the client
+// already knows the record (e.g. coming from a professor page), the lookups
+// are skipped.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const reviewSubmitSchema = z
@@ -17,9 +25,12 @@ export const reviewSubmitSchema = z
     // Optional hint when reviewing an already-known professor
     professor_id: z.number().int().positive().optional(),
 
-    // Otherwise these three identify the professor
+    // Otherwise these identify the professor
     university_id: z.number().int().positive().optional(),
     department_id: z.number().int().positive().optional(),
+    // Free-text department name. Server parses "CSE - Computer Science and
+    // Engineering" into shortName + nameEn at insert time.
+    department_name_en: z.string().trim().min(2).max(200).optional(),
     professor_name_en: z.string().trim().min(2).max(200).optional(),
     professor_name_bn: z.string().trim().max(200).optional().or(z.literal('')),
 
@@ -51,14 +62,19 @@ export const reviewSubmitSchema = z
     honeypot_field: z.string().max(0, 'Bot detected').default(''),
   })
   .refine(
-    (data) =>
-      typeof data.professor_id === 'number' ||
-      (typeof data.university_id === 'number' &&
-        typeof data.department_id === 'number' &&
-        !!data.professor_name_en),
+    (data) => {
+      // Path A: professor_id alone is enough (their uni/dept are looked up server-side).
+      if (typeof data.professor_id === 'number') return true
+      // Path B: we need university_id, some way to identify the department,
+      // and a professor name.
+      const hasUni = typeof data.university_id === 'number'
+      const hasDept = typeof data.department_id === 'number' || !!data.department_name_en
+      const hasProf = !!data.professor_name_en
+      return hasUni && hasDept && hasProf
+    },
     {
       message:
-        'Either professor_id, or (university_id + department_id + professor_name_en) is required',
+        'Either professor_id, or (university_id + (department_id|department_name_en) + professor_name_en) is required',
       path: ['professor_id'],
     },
   )

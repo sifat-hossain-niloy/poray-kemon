@@ -517,6 +517,40 @@ deploy` and `CREATE EXTENSION IF NOT EXISTS pg_trgm` against the test DB.
 
 ---
 
+## Session 10 — department typeahead + admin merge tool (`feat/department-typeahead-with-add`)
+
+### What was built
+
+The review form's department picker is no longer a `<select>` populated only with seed-curated rows — it's a search-as-you-type dropdown with an "Add as new" fallback, mirroring the professor typeahead from the previous session. Students at universities whose departments weren't manually seeded can now submit reviews; their typed text spawns a new `departments` row with `status='unverified'` that surfaces in the admin merge tool.
+
+- **`DepartmentStatus` enum + migration `20260609193125_add_department_status`** — `verified | unverified`, default `unverified`. Seed-curated rows are flipped to `verified` on every seed run.
+- **`GET /api/departments/search?q=&university_id=`** — pg_trgm + ILIKE over `short_name` and `name_en`. With an empty query it returns the full dept list for the uni so the dropdown is useful on focus, not just after typing. Verified rows rank above unverified ones.
+- **`components/review/DepartmentTypeahead.tsx`** — same debounced (180 ms) abort-in-flight, opaque-floating-panel pattern as `ProfessorTypeahead`. Renders an amber "Pending review" badge on unverified hits so users notice when they're picking a row that might be a duplicate.
+- **`lib/department-parser.ts`** — pure smart-parser that maps free-text input into `{shortName, nameEn}`. Handles:
+  - `"CSE"` → `{ shortName: 'CSE', nameEn: 'CSE' }`
+  - `"Computer Science and Engineering"` → `{ shortName: null, nameEn: ... }`
+  - `"CSE - Computer Science and Engineering"` (hyphen/en-dash/em-dash) → split
+  - `"Computer Science and Engineering (CSE)"` → split
+  - `"C.S.E."` → normalised to `CSE`
+  - Covered by 10 unit tests.
+- **`resolveDepartment` in `app/api/reviews/route.ts`** — find-or-create that runs before `resolveProfessor`. Case-insensitive match on either `shortName` or `nameEn` within the university; falls back to creating a new row with the parsed values, picking a non-colliding slug, and falling back to null `shortName` if a casing collision sneaks through.
+- **Admin merge tool**: a checkbox column on `app/admin/universities/[id]/DepartmentList.tsx`. Tick two or more rows, a banner appears with a "Keep as canonical" picker. Submitting hits `POST /api/admin/departments/merge` which inside one transaction (a) sanity-checks every dept belongs to the same university, (b) re-points `professors.department_id` and `courses.department_id` from sources → target, (c) marks the target as `verified`, (d) deletes the source rows. Cross-university merges and `target ∈ sources` are rejected.
+- **Display polish**: `lib/search.ts` department branch now uses `COALESCE(d.short_name, d.name_en)` in the title so user-created rows with null shortName don't render as `"BUET · null"`. Professor/university pages already used `shortName ?? nameEn`.
+
+### Decisions
+
+| Decision                                                  | Reason                                                                                                                                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server-side parse, not client-side                        | Single source of truth. Same regexes apply whether the user types via the typeahead or hits the API directly. The form just hands over `department_name_en` raw.      |
+| Empty-query returns the dept list                         | Students who don't know if their department is in the catalog will tap the field and look — not type. The dropdown has to be useful on focus.                         |
+| Status `unverified` for new rows, not `pending_review`    | Mirrors `ProfessorStatus.unverified`. Two-state is enough for what the admin tool needs; we can split if behaviour later diverges.                                    |
+| Free-text professor name when dept is new (unsaved)       | The professor typeahead needs `department_id` to scope its search. A brand-new dept has no id yet; allow free-text and let the auto-create chain handle it on submit. |
+| Repoint `courses` too in the merge transaction            | Courses FK to dept. Without the repoint, merging would drop courses (and silently break the running-average page).                                                    |
+| Reject cross-university merges                            | Even if an admin clicks through, a cross-uni merge would reassign professors to a different institution — too dangerous to allow with a checkbox UI.                  |
+| Skipped the per-user "N new departments per 24h" throttle | Deferred until we see actual abuse — premature complexity. Admin merge tool gives us a recovery path either way.                                                      |
+
+---
+
 ## Feature Reference
 
 As features are completed, add them here for quick lookup.
@@ -557,6 +591,11 @@ As features are completed, add them here for quick lookup.
 | Reports queue | `app/admin/reports/page.tsx` + `AdminReportActions` | Oldest-first; resolve keep / remove |
 | Admin moderation API | `app/api/admin/reviews/[id]/moderation/route.ts`, `app/api/admin/reports/[id]/resolve/route.ts`, `app/api/admin/professors/[id]/route.ts` | Zod-validated PATCH/POST, cache invalidation |
 | Integration test suite | `test/global-setup.integration.ts`, `test/setup.integration.ts`, `test/integration-helpers.ts`, `__tests__/integration/*.test.ts` | 25 DB-backed tests against the test Postgres; mocks Redis + NextAuth |
+| Department search API | `app/api/departments/search/route.ts` | Scoped to a single university; pg_trgm + ILIKE across `short_name` and `name_en`; verified rows surface first |
+| Department typeahead picker | `components/review/DepartmentTypeahead.tsx` | Same debounced/opaque pattern as the professor picker; full dept list visible on focus; dashed "Add 'xxxx' as a new department" fallback |
+| Department auto-create on review submit | `lib/department-parser.ts`, `resolveDepartment` in `app/api/reviews/route.ts` | Parses "CSE - Computer Science and Engineering" / "Computer Science and Engineering (CSE)" / bare "CSE" / full-name input into `shortName + nameEn`. New rows stored with `status='unverified'`. |
+| Department status field | `prisma/schema.prisma`, migration `20260609193125_add_department_status` | `DepartmentStatus` enum (verified/unverified), default unverified. Seed-curated departments flip to verified on every seed run. |
+| Admin merge-departments tool | `app/api/admin/departments/merge/route.ts`, `app/admin/universities/[id]/DepartmentList.tsx` | Tick ≥2 rows in the admin dept list → pick canonical target → transactional repoint of professors + courses + delete sources + mark target verified |
 
 ### Planned Features (from SRS)
 
