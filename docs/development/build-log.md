@@ -517,37 +517,27 @@ deploy` and `CREATE EXTENSION IF NOT EXISTS pg_trgm` against the test DB.
 
 ---
 
-## Session 10 — department typeahead + admin merge tool (`feat/department-typeahead-with-add`)
+## Session 9 — June 2026 (`feat/professor-typeahead-with-add` + `feat/seed-all-bd-universities`)
 
 ### What was built
 
-The review form's department picker is no longer a `<select>` populated only with seed-curated rows — it's a search-as-you-type dropdown with an "Add as new" fallback, mirroring the professor typeahead from the previous session. Students at universities whose departments weren't manually seeded can now submit reviews; their typed text spawns a new `departments` row with `status='unverified'` that surfaces in the admin merge tool.
-
-- **`DepartmentStatus` enum + migration `20260609193125_add_department_status`** — `verified | unverified`, default `unverified`. Seed-curated rows are flipped to `verified` on every seed run.
-- **`GET /api/departments/search?q=&university_id=`** — pg_trgm + ILIKE over `short_name` and `name_en`. With an empty query it returns the full dept list for the uni so the dropdown is useful on focus, not just after typing. Verified rows rank above unverified ones.
-- **`components/review/DepartmentTypeahead.tsx`** — same debounced (180 ms) abort-in-flight, opaque-floating-panel pattern as `ProfessorTypeahead`. Renders an amber "Pending review" badge on unverified hits so users notice when they're picking a row that might be a duplicate.
-- **`lib/department-parser.ts`** — pure smart-parser that maps free-text input into `{shortName, nameEn}`. Handles:
-  - `"CSE"` → `{ shortName: 'CSE', nameEn: 'CSE' }`
-  - `"Computer Science and Engineering"` → `{ shortName: null, nameEn: ... }`
-  - `"CSE - Computer Science and Engineering"` (hyphen/en-dash/em-dash) → split
-  - `"Computer Science and Engineering (CSE)"` → split
-  - `"C.S.E."` → normalised to `CSE`
-  - Covered by 10 unit tests.
-- **`resolveDepartment` in `app/api/reviews/route.ts`** — find-or-create that runs before `resolveProfessor`. Case-insensitive match on either `shortName` or `nameEn` within the university; falls back to creating a new row with the parsed values, picking a non-colliding slug, and falling back to null `shortName` if a casing collision sneaks through.
-- **Admin merge tool**: a checkbox column on `app/admin/universities/[id]/DepartmentList.tsx`. Tick two or more rows, a banner appears with a "Keep as canonical" picker. Submitting hits `POST /api/admin/departments/merge` which inside one transaction (a) sanity-checks every dept belongs to the same university, (b) re-points `professors.department_id` and `courses.department_id` from sources → target, (c) marks the target as `verified`, (d) deletes the source rows. Cross-university merges and `target ∈ sources` are rejected.
-- **Display polish**: `lib/search.ts` department branch now uses `COALESCE(d.short_name, d.name_en)` in the title so user-created rows with null shortName don't render as `"BUET · null"`. Professor/university pages already used `shortName ?? nameEn`.
+- **Professor typeahead picker** in the review form. Replaces the free-text input with a debounced search dropdown scoped to the chosen university + department, plus a dashed "Add 'xxxx' as a new professor" fallback row that lets a student submit even when their professor isn't in the catalog yet. The existing `POST /api/reviews` auto-create path picks up the new name on submit.
+  - `GET /api/professors/search?q=&university_id=&department_id=` — pg_trgm + ILIKE fuzzy match, joins `professor_courses` for `review_count`. Public read; no auth, no tracking.
+  - `components/review/ProfessorTypeahead.tsx` — 180 ms debounce, abort-in-flight, opaque floating panel (`bg-card` + `shadow-lg`) so the form rows beneath don't bleed through, "Change" button to clear a locked-in pick.
+- **Full canonical BD university catalog** seeded from the Wikipedia _List of universities in Bangladesh_ page (English names + acronyms) and the equivalent Bangla Wikipedia page (Bengali names). 161 entries total; 15 still carry curated department lists.
+  - Acronyms come from Wikipedia, not generated initials — no more `BU2 / BU3 / GUB2 / PU4`. When two institutions naturally share an acronym (e.g. four candidates for "BU"), the most-recognised owner keeps the plain form; the others get readable suffixes (`BdshU` for Bangladesh University, `BritU` for Britannia, `BdU` for Bandarban).
+  - **Idempotent heal-in-place**: re-running `pnpm db:seed` against an older DB rewrites stale rows by `nameEn` match, then prunes any leftover row that has no professors attached. Rows with real professors are kept and flagged for admin review rather than silently rewritten.
+  - Earlier bulk seed produced `Independent University` (IU3) as a duplicate of `Independent University, Bangladesh` (IUB) because normalization didn't catch the suffix variant — this version uses Wikipedia's canonical spelling for both fields, so there's only one row per institution.
 
 ### Decisions
 
-| Decision                                                  | Reason                                                                                                                                                                |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Server-side parse, not client-side                        | Single source of truth. Same regexes apply whether the user types via the typeahead or hits the API directly. The form just hands over `department_name_en` raw.      |
-| Empty-query returns the dept list                         | Students who don't know if their department is in the catalog will tap the field and look — not type. The dropdown has to be useful on focus.                         |
-| Status `unverified` for new rows, not `pending_review`    | Mirrors `ProfessorStatus.unverified`. Two-state is enough for what the admin tool needs; we can split if behaviour later diverges.                                    |
-| Free-text professor name when dept is new (unsaved)       | The professor typeahead needs `department_id` to scope its search. A brand-new dept has no id yet; allow free-text and let the auto-create chain handle it on submit. |
-| Repoint `courses` too in the merge transaction            | Courses FK to dept. Without the repoint, merging would drop courses (and silently break the running-average page).                                                    |
-| Reject cross-university merges                            | Even if an admin clicks through, a cross-uni merge would reassign professors to a different institution — too dangerous to allow with a checkbox UI.                  |
-| Skipped the per-user "N new departments per 24h" throttle | Deferred until we see actual abuse — premature complexity. Admin merge tool gives us a recovery path either way.                                                      |
+| Decision                                       | Reason                                                                                                                                                                              |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Scope professor search by uni + dept           | A global "search Rahman" is useless; the picker only matters inside a context the student already chose                                                                             |
+| Auto-create professors on review submit        | Department-typeahead is next; mirroring the same pattern (server-side auto-create when `*_id` is absent) keeps the form simple                                                      |
+| Curate the catalog instead of crowdsourcing it | A blank university catalog blocks the entire review flow for 80 % of students. Wikipedia gives us a defensible starting point; admins can clean up the long tail via /admin         |
+| Placeholder-rename + upsert dance              | Direct upserts hit unique-constraint collisions when stale rows hold shortNames the canonical list wants. Renaming everything to `__tmp_<id>` first decouples the order of upserts. |
+| Prune by placeholder, not by `nameEn` notIn    | Means we never accidentally delete a row that has real professors attached — those rows can't have a placeholder shortName, since the upsert healed them                            |
 
 ---
 
@@ -557,13 +547,13 @@ As features are completed, add them here for quick lookup.
 
 ### Completed Features
 
-| Feature               | Files                                                | Notes                                                   |
-| --------------------- | ---------------------------------------------------- | ------------------------------------------------------- |
-| Prisma schema         | `prisma/schema.prisma`                               | All 10 tables, anonymity contract enforced by structure |
-| NextAuth Google OAuth | `lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts` | No email stored — only Google `sub`                     |
-| Foundation libs       | `lib/db.ts`, `lib/redis.ts`, `lib/strings.ts`        | Singletons safe for Next.js dev/prod                    |
-| Seed data             | `prisma/seed.ts`                                     | 20 BD universities + departments                        |
-| CI pipeline           | `.github/workflows/ci.yml`                           | 4 jobs: quality → unit → integration → build            |
+| Feature               | Files                                                | Notes                                                                                                                                                 |
+| --------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prisma schema         | `prisma/schema.prisma`                               | All 10 tables, anonymity contract enforced by structure                                                                                               |
+| NextAuth Google OAuth | `lib/auth.ts`, `app/api/auth/[...nextauth]/route.ts` | No email stored — only Google `sub`                                                                                                                   |
+| Foundation libs       | `lib/db.ts`, `lib/redis.ts`, `lib/strings.ts`        | Singletons safe for Next.js dev/prod                                                                                                                  |
+| Seed data             | `prisma/seed.ts`                                     | 161 Wikipedia-sourced BD universities (canonical acronyms + Bangla names + city); 15 with curated departments; idempotent heal-in-place + stale prune |
+| CI pipeline           | `.github/workflows/ci.yml`                           | 4 jobs: quality → unit → integration → build                                                                                                          |
 
 | Homepage with search | `app/page.tsx` | RSC with Redis-cached stats (60 s TTL) |
 | Universities listing | `app/universities/page.tsx` | ISR 5 min, grouped by type |
@@ -591,11 +581,9 @@ As features are completed, add them here for quick lookup.
 | Reports queue | `app/admin/reports/page.tsx` + `AdminReportActions` | Oldest-first; resolve keep / remove |
 | Admin moderation API | `app/api/admin/reviews/[id]/moderation/route.ts`, `app/api/admin/reports/[id]/resolve/route.ts`, `app/api/admin/professors/[id]/route.ts` | Zod-validated PATCH/POST, cache invalidation |
 | Integration test suite | `test/global-setup.integration.ts`, `test/setup.integration.ts`, `test/integration-helpers.ts`, `__tests__/integration/*.test.ts` | 25 DB-backed tests against the test Postgres; mocks Redis + NextAuth |
-| Department search API | `app/api/departments/search/route.ts` | Scoped to a single university; pg_trgm + ILIKE across `short_name` and `name_en`; verified rows surface first |
-| Department typeahead picker | `components/review/DepartmentTypeahead.tsx` | Same debounced/opaque pattern as the professor picker; full dept list visible on focus; dashed "Add 'xxxx' as a new department" fallback |
-| Department auto-create on review submit | `lib/department-parser.ts`, `resolveDepartment` in `app/api/reviews/route.ts` | Parses "CSE - Computer Science and Engineering" / "Computer Science and Engineering (CSE)" / bare "CSE" / full-name input into `shortName + nameEn`. New rows stored with `status='unverified'`. |
-| Department status field | `prisma/schema.prisma`, migration `20260609193125_add_department_status` | `DepartmentStatus` enum (verified/unverified), default unverified. Seed-curated departments flip to verified on every seed run. |
-| Admin merge-departments tool | `app/api/admin/departments/merge/route.ts`, `app/admin/universities/[id]/DepartmentList.tsx` | Tick ≥2 rows in the admin dept list → pick canonical target → transactional repoint of professors + courses + delete sources + mark target verified |
+| Professor search API | `app/api/professors/search/route.ts` | Scoped to uni+dept, pg_trgm fuzzy + ILIKE, joins `professor_courses` for review_count |
+| Professor typeahead picker | `components/review/ProfessorTypeahead.tsx` | Debounced (180 ms), abort-in-flight, opaque floating panel; dashed "Add 'xxxx' as a new professor" fallback row when no exact match |
+| Canonical BD university catalog | `prisma/seed.ts` | 161 Wikipedia-sourced entries with canonical acronyms + Bangla names + city; placeholder-rename + upsert + prune for idempotent re-seeds |
 
 ### Planned Features (from SRS)
 
