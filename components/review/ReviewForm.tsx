@@ -179,12 +179,18 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
 
     setSubmitting(true)
     try {
-      // Department: if id is null the server auto-creates from
-      // department_name_en (smart-parsed into shortName + nameEn).
+      // Department: if id is null the server auto-creates the row.
+      // When the typeahead's add-new micro-form was used, both short_name
+      // and name_en are explicit — send both and the server skips parsing.
       const departmentPayload = departmentSelection
         ? departmentSelection.id
           ? { department_id: departmentSelection.id }
-          : { department_name_en: departmentSelection.name_en }
+          : {
+              department_name_en: departmentSelection.name_en,
+              ...(departmentSelection.short_name
+                ? { department_short_name: departmentSelection.short_name }
+                : {}),
+            }
         : {}
 
       const payload = {

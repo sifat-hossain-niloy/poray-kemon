@@ -143,42 +143,38 @@
 - [x] Legacy `STRINGS` re-export in `lib/strings.ts` kept for the rest of the app
       — progressive migration; other pages stay Bangla-only for now
 
-### Session 10 — professor typeahead + canonical BD university catalog (two PRs)
+### Session 10 — professor typeahead + canonical BD university catalog (two PRs, both merged)
 
 `feat/professor-typeahead-with-add`:
 
 - [x] `app/api/professors/search/route.ts` — scoped (uni+dept) pg_trgm fuzzy + ILIKE search, joins `professor_courses` for `review_count`. Public.
-- [x] `components/review/ProfessorTypeahead.tsx` — debounced (180 ms), abort
-      in-flight on each keystroke, opaque floating panel (`bg-card` +
-      `shadow-lg`) so course-field rows don't bleed through.
-- [x] Dashed "Add 'xxxx' as a new professor" fallback row when no exact
-      match. On submit, the existing `POST /api/reviews` auto-create path
-      creates the Professor row — no extra client-side work.
-- [x] `ReviewForm.tsx` rewired: picker is disabled until both uni and
-      dept are chosen; switching either clears the selection.
+- [x] `components/review/ProfessorTypeahead.tsx` — debounced (180 ms), abort in-flight on each keystroke, opaque floating panel (`bg-card` + `shadow-lg`) so course-field rows don't bleed through.
+- [x] Dashed "Add 'xxxx' as a new professor" fallback row when no exact match. On submit, the existing `POST /api/reviews` auto-create path creates the Professor row — no extra client-side work.
+- [x] `ReviewForm.tsx` rewired: picker is disabled until both uni and dept are chosen; switching either clears the selection.
 
 `feat/seed-all-bd-universities`:
 
-- [x] `prisma/seed.ts` rewritten to use a curated Wikipedia-sourced
-      catalog (161 entries). English from
-      `List_of_universities_in_Bangladesh`, Bangla from the equivalent
-      page on bn.wikipedia.
-- [x] Acronyms are Wikipedia-canonical. No more generated initials, no
-      more `BU/BU1/BU2` numeric suffixes. Where two institutions
-      naturally share an acronym, the most-recognised owner keeps the
-      plain form and the rest get readable suffixes (`BdshU`, `BritU`,
-      `BdU`, etc.).
-- [x] Each row carries `nameEn`, `nameBn`, `shortName`, `slug`,
-      `locationCity`, `type` — no auto-generation, no inference.
-- [x] **Idempotent heal-in-place re-seed**: every existing
-      `short_name`/`slug` is parked under a `__tmp_<id>` namespace
-      first, canonical upserts run in a clean field, then any row still
-      holding a placeholder is pruned if it has no professors (or
-      flagged for admin review if it does). Cascades departments before
-      pruning so FKs stay clean.
-- [x] Departments table unchanged; only the 15 detailed unis still
-      carry a curated department list. The remaining ~146 will be
-      filled in by the upcoming department typeahead.
+- [x] `prisma/seed.ts` rewritten to use a curated Wikipedia-sourced catalog (161 entries). English from `List_of_universities_in_Bangladesh`, Bangla from the equivalent page on bn.wikipedia.
+- [x] Acronyms are Wikipedia-canonical. No more generated initials, no more `BU/BU1/BU2` numeric suffixes. Where two institutions naturally share an acronym, the most-recognised owner keeps the plain form and the rest get readable suffixes (`BdshU`, `BritU`, `BdU`, etc.).
+- [x] Each row carries `nameEn`, `nameBn`, `shortName`, `slug`, `locationCity`, `type` — no auto-generation, no inference.
+- [x] **Idempotent heal-in-place re-seed**: every existing `short_name`/`slug` is parked under a `__tmp_<id>` namespace first, canonical upserts run in a clean field, then any row still holding a placeholder is pruned if it has no professors (or flagged for admin review if it does). Cascades departments before pruning so FKs stay clean.
+- [x] Departments table unchanged; only the 15 detailed unis still carry a curated department list. The remaining ~146 are filled in by the Session 11 department typeahead.
+
+### Session 11 — department typeahead + admin merge tool (`feat/department-typeahead-with-add`)
+
+- [x] `DepartmentStatus` enum + migration `20260609193125_add_department_status`. Seed-curated rows flip to `verified`; user-created rows default to `unverified`.
+- [x] `GET /api/departments/search?q=&university_id=` — pg_trgm + ILIKE search; empty-query returns the full uni dept list; verified rows ranked first.
+- [x] `components/review/DepartmentTypeahead.tsx` — same opaque debounced/floating-panel pattern as `ProfessorTypeahead`; amber "Pending review" badge on unverified hits; dashed "Add 'xxxx' as a new department" fallback row.
+- [x] `lib/department-parser.ts` (pure, 10 unit tests) — parses `"CSE - Computer Science and Engineering"`, `"Computer Science and Engineering (CSE)"`, bare `"CSE"`, `"C.S.E."`, or any full-name string into `{shortName, nameEn}`.
+- [x] `resolveDepartment` in `app/api/reviews/route.ts` — runs before `resolveProfessor`. Case-insensitive find-or-create within the university; non-colliding slug; falls back to null `shortName` if a casing collision sneaks through.
+- [x] `ReviewForm.tsx` rewired: the dept `<select>` is gone; a free-text professor input is shown when the dept is a new (unsaved) one (no `department_id` to typeahead-scope by).
+- [x] `POST /api/admin/departments/merge` — transactional: sanity-check shared-university, repoint `professors.department_id` + `courses.department_id`, mark target verified, delete sources. Cross-uni and `target ∈ sources` rejected.
+- [x] `app/admin/universities/[id]/DepartmentList.tsx` — checkbox column + merge banner that appears when ≥2 rows selected. "Pending review" badge on unverified rows.
+- [x] `lib/search.ts` dept branch uses `COALESCE(d.short_name, d.name_en)` so user-created rows with null shortName don't render as `"BUET · null"`.
+- [x] All 25 integration tests + 65 unit tests still pass.
+- [x] **Follow-up polish**: dropdown panel now caps at `max-h-[60vh]` with `overflow-y-auto` so universities with many departments scroll cleanly (same fix applied to `ProfessorTypeahead`).
+- [x] **Add-new is now a two-field micro-form** (`NewDepartmentForm`). Tapping "+ Add as new" no longer instantly stages the raw text — it opens an inline panel with explicit _Acronym_ and _Full name_ inputs, pre-filled by parsing the user's query (so "CSE - Computer Science and Engineering" auto-splits). The user always sees and confirms both fields before submission. New rows still flow through `status='unverified'` and surface in the admin merge tool for verification.
+- [x] `POST /api/reviews` accepts `department_short_name` alongside `department_name_en` and skips the legacy text-parser when both are explicit — the typeahead micro-form always sends both.
 
 ---
 

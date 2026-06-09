@@ -310,8 +310,19 @@ components:
           description: Either this OR `department_name_en` is required when `professor_id` is absent.
         department_name_en:
           type: string
-          description: Free-text department name; server-parsed into short_name + name_en.
-          example: 'CSE - Computer Science and Engineering'
+          description: |
+            Department's full name when auto-creating. May be sent alone
+            (server-parsed into short_name + name_en) or alongside
+            `department_short_name` (typeahead micro-form path — no parsing).
+          example: 'Computer Science and Engineering'
+        department_short_name:
+          type: string
+          maxLength: 20
+          description: |
+            Optional explicit acronym when auto-creating. Sent by the review
+            form's "Add a new department" micro-form so the server doesn't
+            have to guess at where to split the input.
+          example: 'CSE'
         professor_name_en:
           type: string
           description: Required when `professor_id` is absent.

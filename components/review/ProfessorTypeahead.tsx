@@ -188,7 +188,7 @@ export function ProfessorTypeahead({
         {showDropdown ? (
           // Opaque floating panel — without bg-card + shadow on the wrapper,
           // the absolute children let the form rows beneath bleed through.
-          <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-md border border-border bg-card shadow-lg">
+          <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[60vh] overflow-y-auto overscroll-contain rounded-md border border-border bg-card shadow-lg">
             {loading ? <div className="px-3 py-2.5 text-sm text-muted-foreground">…</div> : null}
 
             {hits.length > 0 ? (

@@ -584,6 +584,12 @@ As features are completed, add them here for quick lookup.
 | Professor search API | `app/api/professors/search/route.ts` | Scoped to uni+dept, pg_trgm fuzzy + ILIKE, joins `professor_courses` for review_count |
 | Professor typeahead picker | `components/review/ProfessorTypeahead.tsx` | Debounced (180 ms), abort-in-flight, opaque floating panel; dashed "Add 'xxxx' as a new professor" fallback row when no exact match |
 | Canonical BD university catalog | `prisma/seed.ts` | 161 Wikipedia-sourced entries with canonical acronyms + Bangla names + city; placeholder-rename + upsert + prune for idempotent re-seeds |
+| Department search API | `app/api/departments/search/route.ts` | Scoped to a single university; pg_trgm + ILIKE across `short_name` and `name_en`; verified rows surface first |
+| Department typeahead picker | `components/review/DepartmentTypeahead.tsx` | Same debounced/opaque pattern as the professor picker; full dept list visible on focus; dashed "Add 'xxxx' as a new department" fallback |
+| Department auto-create on review submit | `lib/department-parser.ts`, `resolveDepartment` in `app/api/reviews/route.ts` | Parses "CSE - Computer Science and Engineering" / "Computer Science and Engineering (CSE)" / bare "CSE" / full-name input into `shortName + nameEn`. New rows stored with `status='unverified'`. |
+| Department status field | `prisma/schema.prisma`, migration `20260609193125_add_department_status` | `DepartmentStatus` enum (verified/unverified), default unverified. Seed-curated departments flip to verified on every seed run. |
+| Admin merge-departments tool | `app/api/admin/departments/merge/route.ts`, `app/admin/universities/[id]/DepartmentList.tsx` | Tick ≥2 rows in the admin dept list → pick canonical target → transactional repoint of professors + courses + delete sources + mark target verified |
+| Add-new-department micro-form | `components/review/DepartmentTypeahead.tsx` (the `NewDepartmentForm` sub-component) | Tapping "+ Add as new" opens a two-field inline form (Acronym + Full name) prefilled by parsing the typed query. The user explicitly confirms both fields, so we never guess at the split. New rows still land as `status='unverified'` and an admin verifies/merges via the existing tool. |
 
 ### Planned Features (from SRS)
 
