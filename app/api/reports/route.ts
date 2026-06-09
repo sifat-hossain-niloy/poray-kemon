@@ -31,7 +31,7 @@ import {
   reportDedupKey,
   REPORT_DEDUP_TTL_SECONDS,
 } from '@/lib/reports'
-import { STRINGS } from '@/lib/strings'
+import { getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json(
-      { error: STRINGS.errors.unauthorized, code: 'UNAUTHENTICATED' },
+      { error: (await getStrings()).errors.unauthorized, code: 'UNAUTHENTICATED' },
       { status: 401 },
     )
   }
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
 
   if (!isFirstReport) {
     // Idempotent — pretend we accepted it. Don't leak the dedup mechanism.
-    return NextResponse.json({ message: STRINGS.report.success }, { status: 201 })
+    return NextResponse.json({ message: (await getStrings()).report.success }, { status: 201 })
   }
 
   // ── 5. INSERT report + maybe auto-hide ───────────────────────────────────
@@ -126,7 +126,7 @@ export async function POST(req: Request) {
       // Swallow — Redis already noisy on the way in.
     }
     console.error('[reports] write failed:', err)
-    return NextResponse.json({ error: STRINGS.errors.serverError }, { status: 500 })
+    return NextResponse.json({ error: (await getStrings()).errors.serverError }, { status: 500 })
   }
 
   // ── 6. Cache invalidation when we auto-hid ───────────────────────────────
@@ -150,7 +150,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json(
     {
-      message: STRINGS.report.success,
+      message: (await getStrings()).report.success,
       auto_hidden: didAutoHide,
       threshold: AUTO_HIDE_THRESHOLD,
     },

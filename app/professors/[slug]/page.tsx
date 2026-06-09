@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ReviewCard } from '@/components/review/ReviewCard'
 import { combineProfessorStats } from '@/lib/professor-stats'
-import { STRINGS } from '@/lib/strings'
+import { getLocale, getStrings } from '@/lib/i18n'
 import Link from 'next/link'
 
 // Dynamic: per-viewer vote state can't be cached.
@@ -33,6 +33,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ProfessorPage({ params }: PageProps) {
+  const [strings, locale] = await Promise.all([getStrings(), getLocale()])
+  const numberLocale = locale === 'en' ? 'en-US' : 'bn-BD'
+  const breadcrumbLabel = locale === 'en' ? 'Universities' : 'বিশ্ববিদ্যালয়'
+  const coursesHeading = locale === 'en' ? 'Courses' : 'কোর্সসমূহ'
+  const coursesSuffix = locale === 'en' ? 'courses' : 'টি কোর্স'
+  const outOfFive = locale === 'en' ? '/ 5' : '/ ৫'
+  const seeAll = (n: number) =>
+    locale === 'en'
+      ? `See all ${n.toLocaleString(numberLocale)} reviews →`
+      : `সব ${n.toLocaleString(numberLocale)} রিভিউ দেখুন →`
   const { slug } = await params
   const session = await auth()
   const viewerId = session?.user?.id ?? null
@@ -90,7 +100,7 @@ export default async function ProfessorPage({ params }: PageProps) {
       <div className="mb-8">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
           <Link href="/universities" className="text-muted-foreground hover:text-foreground">
-            বিশ্ববিদ্যালয়
+            {breadcrumbLabel}
           </Link>
           <span className="text-muted-foreground">›</span>
           <Link
@@ -114,14 +124,14 @@ export default async function ProfessorPage({ params }: PageProps) {
             {professor.department.shortName ?? professor.department.nameEn}
           </Badge>
           {professor.designation ? (
-            <Badge variant="outline">{STRINGS.professor.designation[professor.designation]}</Badge>
+            <Badge variant="outline">{strings.professor.designation[professor.designation]}</Badge>
           ) : null}
-          <Badge variant="outline">{STRINGS.professor.status[professor.status]}</Badge>
+          <Badge variant="outline">{strings.professor.status[professor.status]}</Badge>
         </div>
 
         <div className="mt-6">
           <Button render={<Link href={`/review/new?professor=${professor.slug}`} />}>
-            {STRINGS.professor.writeReview}
+            {strings.professor.writeReview}
           </Button>
         </div>
       </div>
@@ -131,10 +141,10 @@ export default async function ProfessorPage({ params }: PageProps) {
         <Card className="mb-8">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <CardTitle className="text-base">{STRINGS.professor.overallScore}</CardTitle>
+              <CardTitle className="text-base">{strings.professor.overallScore}</CardTitle>
               <span className="text-xs text-muted-foreground">
-                {STRINGS.professor.reviewCount(combined.totalReviews)} ·{' '}
-                {combined.coursesWithReviews.toLocaleString('bn-BD')} টি কোর্স
+                {strings.professor.reviewCount(combined.totalReviews)} ·{' '}
+                {combined.coursesWithReviews.toLocaleString(numberLocale)} {coursesSuffix}
               </span>
             </div>
           </CardHeader>
@@ -143,18 +153,18 @@ export default async function ProfessorPage({ params }: PageProps) {
               <span className="text-4xl font-bold tabular-nums">
                 {combined.overallScore?.toFixed(1) ?? '—'}
               </span>
-              <span className="text-sm text-muted-foreground">/ ৫</span>
+              <span className="text-sm text-muted-foreground">{outOfFive}</span>
               {combined.wouldRecommendPct !== null ? (
                 <Badge variant="secondary" className="ml-auto">
-                  {STRINGS.professor.wouldRecommendPercent(Math.round(combined.wouldRecommendPct))}
+                  {strings.professor.wouldRecommendPercent(Math.round(combined.wouldRecommendPct))}
                 </Badge>
               ) : null}
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label={STRINGS.ratings.teachingQuality} value={combined.avgTeachingQuality} />
-              <Stat label={STRINGS.ratings.gradingFairness} value={combined.avgGradingFairness} />
-              <Stat label={STRINGS.ratings.courseDifficulty} value={combined.avgCourseDifficulty} />
-              <Stat label={STRINGS.ratings.attendance} value={combined.avgAttendance} />
+              <Stat label={strings.ratings.teachingQuality} value={combined.avgTeachingQuality} />
+              <Stat label={strings.ratings.gradingFairness} value={combined.avgGradingFairness} />
+              <Stat label={strings.ratings.courseDifficulty} value={combined.avgCourseDifficulty} />
+              <Stat label={strings.ratings.attendance} value={combined.avgAttendance} />
             </div>
           </CardContent>
         </Card>
@@ -162,12 +172,12 @@ export default async function ProfessorPage({ params }: PageProps) {
 
       {/* ── Courses + preview reviews (SRS §4.6 FR-STAT-02 — Level 2) ────── */}
       <section>
-        <h2 className="mb-4 text-xl font-semibold">কোর্সসমূহ</h2>
+        <h2 className="mb-4 text-xl font-semibold">{coursesHeading}</h2>
 
         {professor.professorCourses.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
-              {STRINGS.professor.noCoursesYet}
+              {strings.professor.noCoursesYet}
             </CardContent>
           </Card>
         ) : (
@@ -187,18 +197,18 @@ export default async function ProfessorPage({ params }: PageProps) {
                           {pc.course.courseName}
                         </CardTitle>
                         <span className="text-xs text-muted-foreground">
-                          {STRINGS.professor.reviewCount(pc.reviewCount)}
+                          {strings.professor.reviewCount(pc.reviewCount)}
                         </span>
                       </div>
                     </CardHeader>
                     <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                      <Stat label={STRINGS.ratings.teachingQuality} value={pc.avgTeachingQuality} />
-                      <Stat label={STRINGS.ratings.gradingFairness} value={pc.avgGradingFairness} />
+                      <Stat label={strings.ratings.teachingQuality} value={pc.avgTeachingQuality} />
+                      <Stat label={strings.ratings.gradingFairness} value={pc.avgGradingFairness} />
                       <Stat
-                        label={STRINGS.ratings.courseDifficulty}
+                        label={strings.ratings.courseDifficulty}
                         value={pc.avgCourseDifficulty}
                       />
-                      <Stat label={STRINGS.ratings.attendance} value={pc.avgAttendance} />
+                      <Stat label={strings.ratings.attendance} value={pc.avgAttendance} />
                     </CardContent>
                   </Card>
 
@@ -229,7 +239,7 @@ export default async function ProfessorPage({ params }: PageProps) {
                           href={courseHref}
                           className="block rounded-md border border-border bg-card px-3 py-2 text-center text-xs font-medium text-primary transition-colors hover:bg-muted"
                         >
-                          সব {pc.reviewCount.toLocaleString('bn-BD')} রিভিউ দেখুন →
+                          {seeAll(pc.reviewCount)}
                         </Link>
                       ) : null}
                     </div>

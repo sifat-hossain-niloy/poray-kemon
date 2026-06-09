@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { signIn, useSession } from 'next-auth/react'
-import { STRINGS } from '@/lib/strings'
+import { useLocale, useStrings } from '@/lib/i18n/client'
 
 interface Props {
   reviewId: number
@@ -13,6 +13,8 @@ interface Props {
 
 export function HelpfulButton({ reviewId, initialHelpfulCount, initialVoted = false }: Props) {
   const { status } = useSession()
+  const strings = useStrings()
+  const locale = useLocale()
   const [helpful, setHelpful] = useState(initialHelpfulCount)
   const [voted, setVoted] = useState(initialVoted)
   const [busy, setBusy] = useState(false)
@@ -71,7 +73,7 @@ export function HelpfulButton({ reviewId, initialHelpfulCount, initialVoted = fa
         className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
       >
         <HeartIcon active />
-        {STRINGS.auth.signInToVote}
+        {strings.auth.signInToVote}
       </button>
     )
   }
@@ -82,7 +84,7 @@ export function HelpfulButton({ reviewId, initialHelpfulCount, initialVoted = fa
       onClick={onClick}
       disabled={busy || status === 'loading'}
       aria-pressed={voted}
-      title={voted ? STRINGS.reviewDisplay.helpful(helpful) : STRINGS.reviewDisplay.markHelpful}
+      title={voted ? strings.reviewDisplay.helpful(helpful) : strings.reviewDisplay.markHelpful}
       className={
         'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-60 ' +
         (voted
@@ -91,8 +93,10 @@ export function HelpfulButton({ reviewId, initialHelpfulCount, initialVoted = fa
       }
     >
       <HeartIcon active={voted} />
-      <span className="tabular-nums">{helpful.toLocaleString('bn-BD')}</span>
-      <span className="hidden sm:inline">{STRINGS.reviewDisplay.markHelpful}</span>
+      <span className="tabular-nums">
+        {helpful.toLocaleString(locale === 'en' ? 'en-US' : 'bn-BD')}
+      </span>
+      <span className="hidden sm:inline">{strings.reviewDisplay.markHelpful}</span>
     </button>
   )
 }

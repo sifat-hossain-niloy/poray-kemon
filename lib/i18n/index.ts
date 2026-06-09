@@ -24,11 +24,18 @@ export {
   stringsFor,
 } from './shared'
 
-/** Server-only: read the locale cookie, returning the default if missing/invalid. */
+/** Server-only: read the locale cookie, returning the default if missing/invalid.
+ *  Tolerates contexts where the cookies() store is unavailable (e.g. integration
+ *  tests calling route handlers directly) by falling back to the default.
+ */
 export async function getLocale(): Promise<Locale> {
-  const jar = await cookies()
-  const raw = jar.get(LOCALE_COOKIE_NAME)?.value
-  return isValidLocale(raw) ? raw : DEFAULT_LOCALE
+  try {
+    const jar = await cookies()
+    const raw = jar.get(LOCALE_COOKIE_NAME)?.value
+    return isValidLocale(raw) ? raw : DEFAULT_LOCALE
+  } catch {
+    return DEFAULT_LOCALE
+  }
 }
 
 /** Server-only: convenience that returns the active strings bundle. */
