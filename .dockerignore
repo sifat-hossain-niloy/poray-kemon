@@ -1,0 +1,56 @@
+# ── Don't ship these to the build context ───────────────────────────────────
+# Cuts COPY time + image size, and keeps secrets out of layers.
+
+# Dependencies (the deps stage installs them inside the image)
+node_modules
+.pnpm-store
+.next
+.turbo
+out
+build
+dist
+
+# Local env (server reads NEXTAUTH_SECRET etc from runtime env, not from a file)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Tests / dev tooling
+__tests__
+test
+coverage
+playwright-report
+test-results
+.playwright
+
+# Git + editor + OS
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docs — not needed in the runtime image
+docs
+*.md
+!README.md
+
+# Misc
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Husky hooks aren't useful inside a built image
+.husky
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker
