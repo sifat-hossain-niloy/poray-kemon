@@ -502,6 +502,55 @@ paths:
                           enum: [verified, unverified]
                         professor_count: { type: integer }
 
+  /courses/search:
+    get:
+      tags: [Universities]
+      summary: Search courses (review-form twin-autocomplete)
+      description: |
+        Scoped fuzzy search used by the review form's course-code +
+        course-name autocomplete pair. Returns matching courses within a
+        single department; selecting a hit on the client prepopulates both
+        fields.
+
+        Empty `q` returns the department's full course list (capped) so the
+        dropdown is useful on focus.
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query — matched against course_code AND course_name.
+          example: 'CSE 301'
+        - name: department_id
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 8
+            maximum: 20
+      responses:
+        '200':
+          description: Course results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        course_code: { type: string, nullable: true }
+                        course_name: { type: string }
+                        slug: { type: string, nullable: true }
+                        review_count: { type: integer }
+
   # ── Professors ───────────────────────────────────────────────
 
   /professors/search:

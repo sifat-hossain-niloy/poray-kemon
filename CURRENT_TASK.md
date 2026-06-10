@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Review-form professor typeahead + canonical BD university catalog
-**Last updated:** June 2026 (Session 10)
-**Active branches:** `feat/professor-typeahead-with-add` (PR open) and `feat/seed-all-bd-universities` (PR open)
+**Phase:** Review-form polish — course autocomplete on top of department typeahead
+**Last updated:** June 2026 (Session 12)
+**Active branches:** `feat/course-autocomplete` (PR open, stacked on `feat/department-typeahead-with-add`)
 
 ---
 
@@ -175,6 +175,13 @@
 - [x] **Follow-up polish**: dropdown panel now caps at `max-h-[60vh]` with `overflow-y-auto` so universities with many departments scroll cleanly (same fix applied to `ProfessorTypeahead`).
 - [x] **Add-new is now a two-field micro-form** (`NewDepartmentForm`). Tapping "+ Add as new" no longer instantly stages the raw text — it opens an inline panel with explicit _Acronym_ and _Full name_ inputs, pre-filled by parsing the user's query (so "CSE - Computer Science and Engineering" auto-splits). The user always sees and confirms both fields before submission. New rows still flow through `status='unverified'` and surface in the admin merge tool for verification.
 - [x] `POST /api/reviews` accepts `department_short_name` alongside `department_name_en` and skips the legacy text-parser when both are explicit — the typeahead micro-form always sends both.
+
+### Session 12 — course autocomplete (`feat/course-autocomplete`)
+
+- [x] `GET /api/courses/search?q=&department_id=` — pg_trgm + ILIKE over both `course_code` and `course_name` scoped to a department, returns `review_count` per hit, empty-q returns the full course list (capped at 8).
+- [x] `components/review/CourseFields.tsx` — twin autocomplete inputs for code + name. Both share one search; focusing either opens the dropdown; picking a hit prepopulates BOTH fields ("CSE 301" → "Data Structures" auto-fills) but both stay freely editable.
+- [x] No "Add as new" UI for courses — `POST /api/reviews`'s existing `resolveCourse` helper already runs find-or-create on `(department_id, course_code)`. Course codes are inherently structured ("CSE 301") so duplication risk is low — no admin-verification dance needed.
+- [x] Autocomplete is disabled when the department is a brand-new (unsaved) one. The inputs fall back to plain text fields; the course gets auto-created on submit alongside the department.
 
 ---
 

@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ProfessorTypeahead, type ProfessorSelection } from './ProfessorTypeahead'
 import { DepartmentTypeahead, type DepartmentSelection } from './DepartmentTypeahead'
+import { CourseFields } from './CourseFields'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -365,27 +366,22 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
           </>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
-          <Field label={strings.review.courseCodePlaceholder}>
-            <input
-              type="text"
-              value={courseCode}
-              onChange={(e) => setCourseCode(e.target.value)}
-              placeholder="CSE 301"
-              className={inputClass}
-            />
-          </Field>
-          <Field label={`${strings.review.courseNamePlaceholder} *`}>
-            <input
-              type="text"
-              value={courseName}
-              onChange={(e) => setCourseName(e.target.value)}
-              placeholder="Data Structures"
-              className={inputClass}
-              required
-            />
-          </Field>
-        </div>
+        <CourseFields
+          // Autocomplete only kicks in when we have an existing dept id.
+          // For brand-new (unsaved) departments there's nothing to scope a
+          // search against, so the fields fall back to plain text inputs.
+          departmentId={departmentSelection?.id ?? null}
+          courseCode={courseCode}
+          setCourseCode={setCourseCode}
+          courseName={courseName}
+          setCourseName={setCourseName}
+          labels={{
+            codeLabel: strings.review.courseCodePlaceholder,
+            codePlaceholder: 'CSE 301',
+            nameLabel: `${strings.review.courseNamePlaceholder} *`,
+            namePlaceholder: 'Data Structures',
+          }}
+        />
       </Section>
 
       {/* ── Ratings ───────────────────────────────────────────────────────── */}
