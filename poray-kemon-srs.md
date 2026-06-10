@@ -6,7 +6,7 @@
 
 ---
 
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Draft  
 **Last Updated:** June 2026  
 **Changelog:**
