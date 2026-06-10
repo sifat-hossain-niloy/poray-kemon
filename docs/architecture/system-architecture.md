@@ -63,11 +63,16 @@ Poray Kemon is a Next.js 15 monolith deployed on Vercel (or a Docker-based VPS),
 
 All write operations go through **Next.js API Routes** at `/api/*`. Reads mostly use RSC data fetching directly via Prisma. API routes handle:
 
-- `POST /api/reviews` — review submission (auth + moderation + transaction)
+- `POST /api/reviews` — review submission (auth + moderation + transaction; resolves dept → professor → course with find-or-create at each layer)
 - `POST /api/reviews/:id/helpful` — toggle helpful vote
 - `POST /api/reports` — submit report
+- `GET /api/departments/search?q=&university_id=` — scoped typeahead for the review form's department field (FR-DIR-05)
+- `GET /api/professors/search?q=&university_id=&department_id=` — scoped typeahead for the review form's professor field
+- `GET /api/courses/search?q=&department_id=` — twin-autocomplete that drives both course-code and course-name fields
+- `GET /api/search?q=` — cross-entity search for the homepage/navbar (universities + departments + professors UNION ALL)
+- `POST /api/admin/departments/merge` — transactional merge of duplicate department rows (FR-DIR-06)
 - `/api/auth/*` — NextAuth endpoints
-- `/api/admin/*` — admin actions (session-gated)
+- `/api/admin/*` — admin actions (session-gated by `middleware.ts`)
 
 ### 2.3 Data Layer
 
