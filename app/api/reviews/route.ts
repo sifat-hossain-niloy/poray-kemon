@@ -45,6 +45,10 @@ async function resolveDepartment(input: {
   universityId: number
   departmentId?: number
   nameInput?: string
+  /** Explicit shortName from the typeahead's add-new micro-form. When
+   *  present alongside nameInput, we treat both as authoritative and skip
+   *  the legacy free-text parser. */
+  explicitShortName?: string
 }): Promise<{ id: number; nameEn: string; shortName: string | null } | null> {
   if (input.departmentId) {
     return db.department.findUnique({
@@ -54,7 +58,14 @@ async function resolveDepartment(input: {
   }
 
   if (!input.nameInput) return null
-  const parsed = parseDepartmentName(input.nameInput)
+
+  // Prefer the explicit split from the client when both fields are sent —
+  // means the user filled in the add-new micro-form deliberately and we
+  // shouldn't re-parse (and possibly mis-split) their text.
+  const explicitShort = input.explicitShortName?.trim() ?? ''
+  const parsed = explicitShort
+    ? { shortName: explicitShort.slice(0, 20), nameEn: input.nameInput.slice(0, 200) }
+    : parseDepartmentName(input.nameInput)
   if (parsed.nameEn.length < 2) return null
 
   // Case-insensitive find — match either short_name or name_en within the
@@ -291,6 +302,7 @@ export async function POST(req: Request) {
       universityId: data.university_id,
       departmentId: data.department_id,
       nameInput: data.department_name_en,
+      explicitShortName: data.department_short_name,
     })
     if (!dept) {
       return NextResponse.json(

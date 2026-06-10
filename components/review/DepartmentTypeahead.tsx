@@ -21,6 +21,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useLocale } from '@/lib/i18n/client'
+import { parseDepartmentName } from '@/lib/department-parser'
 
 export interface DepartmentSelection {
   id: number | null // null = create on submit
@@ -59,6 +60,14 @@ export function DepartmentTypeahead({
   const [hits, setHits] = useState<Hit[]>([])
   const [loading, setLoading] = useState(false)
   const [focused, setFocused] = useState(false)
+  // When the user taps "+ Add as new", the dropdown swaps to a two-field
+  // micro-form. We don't auto-create the dept in the catalog from a single
+  // ambiguous input — making the user spell out short name and full name
+  // explicitly produces clean data and means the admin merge tool only
+  // needs to handle real duplicates, not parse-failures.
+  const [addingNew, setAddingNew] = useState(false)
+  const [newShortName, setNewShortName] = useState('')
+  const [newNameEn, setNewNameEn] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -66,30 +75,49 @@ export function DepartmentTypeahead({
     locale === 'en'
       ? {
           label: 'Department',
-          placeholder: 'e.g. CSE — Computer Science and Engineering',
+          placeholder: 'Type to search…',
           helper:
-            'Type the short name or the full name. If neither exists, you can add it as a new department.',
-          empty: 'No matches yet.',
+            'Type the short name or full name. If your department is not listed, you can add it — an admin will verify it before it goes public.',
+          empty: 'No matches.',
           pickedExisting: 'Existing department',
-          pickedNew: 'New department — will be added when you submit',
+          pickedNew: 'New department — pending admin verification',
           change: 'Change',
           addAsNew: (q: string) => `Add "${q}" as a new department`,
           professorCount: (n: number) =>
             n === 0 ? 'No professors yet' : `${n} professor${n === 1 ? '' : 's'}`,
           unverifiedBadge: 'Pending review',
+          // New-department micro-form
+          newFormTitle: 'Add a new department',
+          newFormHelp:
+            'Both fields are required. We submit it as "pending review"; an admin will verify, merge duplicates, or correct the spelling before it becomes searchable for other students.',
+          shortLabel: 'Acronym',
+          shortPlaceholder: 'e.g. CSE',
+          fullLabel: 'Full name',
+          fullPlaceholder: 'e.g. Computer Science and Engineering',
+          cancel: 'Cancel',
+          confirm: 'Add department',
         }
       : {
           label: 'বিভাগ',
-          placeholder: 'যেমন: CSE — কম্পিউটার বিজ্ঞান ও প্রকৌশল',
+          placeholder: 'খুঁজতে টাইপ করুন…',
           helper:
-            'সংক্ষিপ্ত নাম বা পূর্ণ নাম টাইপ করুন। তালিকায় না থাকলে নতুন বিভাগ হিসেবে যোগ করতে পারবেন।',
-          empty: 'এখনও কোনো মিল পাওয়া যায়নি।',
+            'সংক্ষিপ্ত বা পূর্ণ নাম টাইপ করুন। তালিকায় না থাকলে নিজে যোগ করতে পারবেন — অ্যাডমিন যাচাই করার পর সবার জন্য দৃশ্যমান হবে।',
+          empty: 'কোনো মিল নেই।',
           pickedExisting: 'বিদ্যমান বিভাগ',
-          pickedNew: 'নতুন বিভাগ — সাবমিট করলে যোগ হবে',
+          pickedNew: 'নতুন বিভাগ — অ্যাডমিন যাচাইয়ের অপেক্ষায়',
           change: 'পরিবর্তন',
           addAsNew: (q: string) => `"${q}" — নতুন বিভাগ হিসেবে যোগ করুন`,
           professorCount: (n: number) => (n === 0 ? 'এখনও কোনো শিক্ষক নেই' : `${n}জন শিক্ষক`),
           unverifiedBadge: 'যাচাই বাকি',
+          newFormTitle: 'নতুন বিভাগ যোগ করুন',
+          newFormHelp:
+            'দুটো ঘরই পূরণ করুন। আমরা এটি "যাচাইয়ের অপেক্ষায়" হিসেবে যোগ করব; অ্যাডমিন পর্যালোচনা করে নিশ্চিত করার পর অন্যদের কাছে দৃশ্যমান হবে।',
+          shortLabel: 'সংক্ষিপ্ত নাম',
+          shortPlaceholder: 'যেমন: CSE',
+          fullLabel: 'পূর্ণ নাম',
+          fullPlaceholder: 'যেমন: কম্পিউটার বিজ্ঞান ও প্রকৌশল',
+          cancel: 'বাতিল',
+          confirm: 'বিভাগ যোগ করুন',
         }
 
   // Debounced fetch. State updates are scheduled via the debounce timer so
@@ -169,9 +197,10 @@ export function DepartmentTypeahead({
   // Offer "Add as new" once they've typed at least a meaningful chunk.
   // Department names are short ("CSE"), so we accept ≥ 2 chars.
   const showAddNew = trimmed.length >= 2 && !hasExactMatch
-  // Show the dropdown whenever the field is focused. With an empty query
-  // we still surface the full department list for this university.
-  const showDropdown = focused && !disabled
+  // Show the dropdown whenever the field is focused, unless the user has
+  // entered the "Add a new department" micro-form (then the form takes over).
+  // With an empty query we still surface the full department list.
+  const showDropdown = focused && !disabled && !addingNew
 
   return (
     <div className="space-y-1.5">
@@ -194,7 +223,7 @@ export function DepartmentTypeahead({
         />
 
         {showDropdown ? (
-          <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-md border border-border bg-card shadow-lg">
+          <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[60vh] overflow-y-auto overscroll-contain rounded-md border border-border bg-card shadow-lg">
             {loading ? <div className="px-3 py-2.5 text-sm text-muted-foreground">…</div> : null}
 
             {hits.length > 0 ? (
@@ -252,13 +281,18 @@ export function DepartmentTypeahead({
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  // We leave parsing to the server — pass the raw query as
-                  // name_en. The review POST handler splits it into
-                  // short_name + name_en at insert time.
-                  onSelect({ id: null, name_en: trimmed, short_name: null })
-                  setQuery('')
-                  setHits([])
-                  setFocused(false)
+                  // Pre-fill the micro-form by parsing whatever the user
+                  // typed. "CSE - Computer Science and Engineering" splits
+                  // cleanly into both fields; a bare "CSE" goes into the
+                  // short-name field with the full-name left blank so the
+                  // user has to fill it in deliberately.
+                  const parsed = parseDepartmentName(trimmed)
+                  const sn = parsed.shortName ?? ''
+                  const fn =
+                    parsed.shortName && parsed.nameEn === parsed.shortName ? '' : parsed.nameEn
+                  setNewShortName(sn)
+                  setNewNameEn(fn)
+                  setAddingNew(true)
                 }}
                 className={
                   'flex w-full items-center gap-2 bg-card px-3 py-2.5 text-left text-sm font-medium text-primary transition-colors hover:bg-primary/10 ' +
@@ -273,6 +307,127 @@ export function DepartmentTypeahead({
             ) : null}
           </div>
         ) : null}
+
+        {addingNew ? (
+          <NewDepartmentForm
+            locale={locale}
+            t={t}
+            shortName={newShortName}
+            setShortName={setNewShortName}
+            nameEn={newNameEn}
+            setNameEn={setNewNameEn}
+            onCancel={() => {
+              setAddingNew(false)
+              setNewShortName('')
+              setNewNameEn('')
+            }}
+            onConfirm={() => {
+              const sn = newShortName.trim().slice(0, 20)
+              const fn = newNameEn.trim().slice(0, 200)
+              if (!fn) return
+              onSelect({
+                id: null,
+                name_en: fn,
+                short_name: sn || null,
+              })
+              setAddingNew(false)
+              setNewShortName('')
+              setNewNameEn('')
+              setQuery('')
+              setHits([])
+              setFocused(false)
+            }}
+          />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+// ── New-department micro-form ────────────────────────────────────────────────
+// Inline panel that swaps in below the typeahead when the user taps "+ Add
+// as new". Two required fields (acronym, full name) with smart prefill from
+// the search query, plus an explanation of the admin-verification loop.
+
+interface NewDeptFormProps {
+  locale: 'en' | 'bn'
+  t: {
+    newFormTitle: string
+    newFormHelp: string
+    shortLabel: string
+    shortPlaceholder: string
+    fullLabel: string
+    fullPlaceholder: string
+    cancel: string
+    confirm: string
+  }
+  shortName: string
+  setShortName: (s: string) => void
+  nameEn: string
+  setNameEn: (s: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+}
+
+function NewDepartmentForm({
+  t,
+  shortName,
+  setShortName,
+  nameEn,
+  setNameEn,
+  onCancel,
+  onConfirm,
+}: NewDeptFormProps) {
+  const canConfirm = nameEn.trim().length >= 2
+  return (
+    <div className="mt-3 rounded-md border-2 border-dashed border-primary/60 bg-primary/5 p-4">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold">{t.newFormTitle}</h3>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">{t.newFormHelp}</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
+        <label className="block space-y-1.5">
+          <span className="block text-xs font-medium">{t.shortLabel}</span>
+          <input
+            type="text"
+            value={shortName}
+            onChange={(e) => setShortName(e.target.value)}
+            placeholder={t.shortPlaceholder}
+            maxLength={20}
+            autoComplete="off"
+            className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="block text-xs font-medium">{t.fullLabel} *</span>
+          <input
+            type="text"
+            value={nameEn}
+            onChange={(e) => setNameEn(e.target.value)}
+            placeholder={t.fullPlaceholder}
+            maxLength={200}
+            autoComplete="off"
+            className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            required
+          />
+        </label>
+      </div>
+      <div className="mt-4 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
+        >
+          {t.cancel}
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={!canConfirm}
+          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity disabled:opacity-50"
+        >
+          {t.confirm}
+        </button>
       </div>
     </div>
   )

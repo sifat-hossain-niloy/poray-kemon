@@ -29,8 +29,11 @@ export const reviewSubmitSchema = z
     university_id: z.number().int().positive().optional(),
     department_id: z.number().int().positive().optional(),
     // Free-text department name. Server parses "CSE - Computer Science and
-    // Engineering" into shortName + nameEn at insert time.
+    // Engineering" into shortName + nameEn at insert time, UNLESS
+    // department_short_name is provided too — then we trust the explicit
+    // split from the typeahead's add-new micro-form and skip parsing.
     department_name_en: z.string().trim().min(2).max(200).optional(),
+    department_short_name: z.string().trim().max(20).optional(),
     professor_name_en: z.string().trim().min(2).max(200).optional(),
     professor_name_bn: z.string().trim().max(200).optional().or(z.literal('')),
 
