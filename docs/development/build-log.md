@@ -590,6 +590,8 @@ As features are completed, add them here for quick lookup.
 | Department status field | `prisma/schema.prisma`, migration `20260609193125_add_department_status` | `DepartmentStatus` enum (verified/unverified), default unverified. Seed-curated departments flip to verified on every seed run. |
 | Admin merge-departments tool | `app/api/admin/departments/merge/route.ts`, `app/admin/universities/[id]/DepartmentList.tsx` | Tick ≥2 rows in the admin dept list → pick canonical target → transactional repoint of professors + courses + delete sources + mark target verified |
 | Add-new-department micro-form | `components/review/DepartmentTypeahead.tsx` (the `NewDepartmentForm` sub-component) | Tapping "+ Add as new" opens a two-field inline form (Acronym + Full name) prefilled by parsing the typed query. The user explicitly confirms both fields, so we never guess at the split. New rows still land as `status='unverified'` and an admin verifies/merges via the existing tool. |
+| Course search API | `app/api/courses/search/route.ts` | Scoped to a single department; pg_trgm + ILIKE across both `course_code` and `course_name`; returns `review_count` per course |
+| Course twin-autocomplete fields | `components/review/CourseFields.tsx` | Shared debounced search drives a dropdown from either the code or name input; picking a hit prepopulates BOTH fields ("CSE 301" → also fills "Data Structures"); both stay editable. No "Add as new" UI — the review POST handler already auto-creates the course row on submit when the code/name combo is new. |
 
 ### Planned Features (from SRS)
 

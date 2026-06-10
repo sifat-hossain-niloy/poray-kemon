@@ -6,7 +6,7 @@
 
 ---
 
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Draft  
 **Last Updated:** June 2026  
 **Changelog:**
@@ -14,6 +14,7 @@
 - v1.1 — Review model changed to professor + course combo (Model B), auto-aggregated per course (Option 2). Semester field removed from MVP. `professor_courses` join table added.
 - v1.2 — Helpful/upvote system added (login required to vote). Lightweight Google OAuth added for voters only. Soft moderation (Approach 2) confirmed.
 - v1.3 — **Core philosophy change:** Login (Google OAuth) required to submit reviews AND vote. Reading remains fully public. Anonymity preserved by never storing `user_id` on the `reviews` record — a separate `review_submissions` table tracks who reviewed which professor+course without exposing review content. IP rate limiting replaced by one-review-per-professor-course-per-account enforcement.
+- v1.4 — **Catalog scope-up + crowdsourced extensions.** University seed grew from 20 to **161 Wikipedia-sourced entries** (every BD university with canonical acronym + Bangla name + city). Departments are no longer admin-only — the review form now lets students add a new department inline via a two-field micro-form (Acronym + Full name); rows land as `status='unverified'` and surface in a new admin **merge-departments** tool. Course code and course name fields became a twin autocomplete that prepopulates both fields from one pick. Professor selection became a scoped typeahead. The static `<select>` dropdowns for university/department are gone.
 
 ---
 
@@ -160,36 +161,46 @@ Visitor arrives
 
 ### 4.1 University & Department Directory
 
-**FR-DIR-01:** The system shall maintain a curated list of Bangladeshi universities. Seed data shall include at minimum:
+**FR-DIR-01:** The system shall maintain a curated catalog of every Bangladeshi university. Seed data is sourced from Wikipedia's _List of universities in Bangladesh_ (English names + canonical acronyms) and the equivalent Bangla Wikipedia page (Bangla names). Each row carries:
 
-| University                                          | Short Name |
-| --------------------------------------------------- | ---------- |
-| Bangladesh University of Engineering and Technology | BUET       |
-| University of Dhaka                                 | DU         |
-| BRAC University                                     | BRACU      |
-| North South University                              | NSU        |
-| Independent University, Bangladesh                  | IUB        |
-| BRAC University                                     | BRACU      |
-| American International University Bangladesh        | AIUB       |
-| Dhaka University of Engineering & Technology        | DUET       |
-| Rajshahi University of Engineering & Technology     | RUET       |
-| Chittagong University of Engineering & Technology   | CUET       |
-| University of Chittagong                            | CU         |
-| Shahjalal University of Science and Technology      | SUST       |
-| Khulna University of Engineering & Technology       | KUET       |
-| Islamic University of Technology                    | IUT        |
-| Daffodil International University                   | DIU        |
-| East West University                                | EWU        |
-| United International University                     | UIU        |
-| University of Asia Pacific                          | UAP        |
-| Military Institute of Science and Technology        | MIST       |
-| Bangladesh Agricultural University                  | BAU        |
+| Field           | Required | Notes                                                                                                                                                                                                                                                                                                   |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name_en`       | ✅       | E.g. "University of Dhaka"                                                                                                                                                                                                                                                                              |
+| `name_bn`       | ✅       | E.g. "ঢাকা বিশ্ববিদ্যালয়"                                                                                                                                                                                                                                                                              |
+| `short_name`    | ✅       | Canonical acronym from Wikipedia (e.g. `DU`, `BUET`). No auto-generated initials, no numeric suffixes. When two institutions share an acronym, the most-recognised owner keeps it and the others get readable suffixes (`BdshU` for Bangladesh University, `BritU` for Britannia, `BdU` for Bandarban). |
+| `slug`          | ✅       | URL-safe form of `short_name`.                                                                                                                                                                                                                                                                          |
+| `location_city` | ✅       | E.g. "Dhaka", "Sylhet".                                                                                                                                                                                                                                                                                 |
+| `type`          | ✅       | `public` \| `private` \| `international`.                                                                                                                                                                                                                                                               |
 
-**FR-DIR-02:** Each university shall have a list of departments. Departments are pre-seeded by admin and not user-created.
+Seed is **idempotent and self-healing** — re-running it parks every `short_name`/`slug` under a `__tmp_<id>` placeholder, runs canonical upserts matched by `name_en`, then prunes any row still holding a placeholder if it has no professors attached (or flags it for admin review otherwise). This means a deployment seeded with an older version gets healed by a single `pnpm db:seed`. Initial seed delivers **161 universities**.
 
-**FR-DIR-03:** The system shall allow admins to add universities and departments via a protected admin interface.
+**FR-DIR-02:** Each university shall have a list of departments. Departments are populated in three ways:
+
+1. **Curated seed** — 15 anchor universities (BUET, DU, NSU, BRACU, IUB, AIUB, RUET, CUET, KUET, SUST, IUT, DIU, EWU, UIU, MIST) ship with 3–7 departments each, stored as `status='verified'`. ~60 rows total.
+2. **Admin creation** — admins can add departments via `/admin/universities/<id>`; they default to `status='verified'`.
+3. **Reviewer auto-create (FR-DIR-05)** — students adding a review for a department not yet in the catalog can spawn the row inline; it lands as `status='unverified'` until an admin verifies or merges it.
+
+**FR-DIR-03:** Admins shall be able to add universities and departments via a protected admin interface (`/admin/universities`).
 
 **FR-DIR-04:** Universities and departments shall not be deletable if they have linked professors with reviews.
+
+**FR-DIR-05 — Reviewer-created departments:** The review submission form (FR-REV-01) shall expose an "Add a new department" affordance below the department typeahead's search results. Activating it opens a two-field inline micro-form:
+
+| Field     | Required | Notes                                                 |
+| --------- | -------- | ----------------------------------------------------- |
+| Acronym   | ❌       | E.g. "CSE". Max 20 chars.                             |
+| Full name | ✅       | E.g. "Computer Science and Engineering". 2–200 chars. |
+
+Both fields are pre-filled by parsing the user's typed query (`"CSE - Computer Science and Engineering"` auto-splits via `lib/department-parser.ts`). The user must explicitly confirm before submission. Rows created this way land as `status='unverified'` and surface with a "Pending review" badge in both the typeahead dropdown and the admin department list.
+
+**FR-DIR-06 — Admin merge-departments tool:** Admins shall be able to collapse duplicate department rows (e.g. "CSE", "C.S.E.", "Computer Science and Engineering" as three rows) into one canonical row. From `/admin/universities/<id>`, the admin ticks ≥ 2 department rows, picks one as the canonical target, and confirms. A single transactional API call (`POST /api/admin/departments/merge`) shall:
+
+1. Sanity-check that every selected department belongs to the same university (cross-university merges rejected).
+2. Re-point all `professors.department_id` and `courses.department_id` from sources → target.
+3. Mark the target `status='verified'`.
+4. Delete the source rows.
+
+The endpoint shall reject merges where the target appears in the source list.
 
 ---
 
@@ -211,7 +222,7 @@ Visitor arrives
 
 **FR-PROF-03:** Professor names shall be stored in both English and Bangla (Bangla optional, English required).
 
-**FR-PROF-04:** Duplicate professor detection — before creating a new profile, the system shall fuzzy-match against existing professors in the same department and display potential matches to the reviewer.
+**FR-PROF-04:** Duplicate professor detection — the review form's professor field is a scoped typeahead (FR-REV-01) that fuzzy-matches against existing professors in the chosen (university, department) via pg_trgm + ILIKE. Existing matches surface in a dropdown before the user can choose "Add as new professor", so accidental duplicates are minimised by construction. Remaining duplicates (e.g. "Dr. Rahman" vs "Mohammad Rahman" entered at different times) are handled administratively via `PATCH /api/admin/professors/[id]`.
 
 **FR-PROF-05:** Each professor profile page shall display:
 
@@ -230,20 +241,24 @@ This is the core feature. All reviews are submitted without any account.
 
 **FR-REV-01 — Required fields:**
 
-| Field                   | Type          | Required | Details                                                                                                                                        |
-| ----------------------- | ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `university`            | Select        | ✅       | Dropdown from directory                                                                                                                        |
-| `department`            | Select        | ✅       | Filtered by selected university                                                                                                                |
-| `professor_name`        | Text / Select | ✅       | Typeahead from existing professors; allows new name entry                                                                                      |
-| `course_code`           | Text          | ✅       | e.g. "CSE 301" — **required in Model B**. If student doesn't know it, they can type the course name instead and it will be matched or created. |
-| `course_name`           | Text          | ✅       | e.g. "Data Structures" — required if course_code is not recognized                                                                             |
-| `teaching_quality`      | 1–5 stars     | ✅       | "ক্লাসে কতটা ভালো পড়ান?"                                                                                                                      |
-| `grading_fairness`      | 1–5 stars     | ✅       | "নম্বর দেওয়া কতটা ন্যায্য?"                                                                                                                   |
-| `course_difficulty`     | 1–5 stars     | ✅       | "কোর্সটা কতটা কঠিন?"                                                                                                                           |
-| `attendance_strictness` | 1–5           | ✅       | "অ্যাটেনডেন্স কতটা কড়া?" (1 = not strict, 5 = very strict)                                                                                    |
-| `would_recommend`       | Boolean       | ✅       | "আবার এই স্যার/ম্যামের এই কোর্স নেবেন?" — Yes / No                                                                                             |
-| `review_text`           | Textarea      | ❌       | Optional, max 500 characters, min 20 if provided                                                                                               |
-| `tags`                  | Multi-select  | ❌       | See tag list below                                                                                                                             |
+| Field                   | Control                                | Required | Details                                                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `university`            | Select                                 | ✅       | Dropdown from the directory (FR-DIR-01). Sorted by short_name.                                                                                                                                                                                     |
+| `department`            | Scoped typeahead                       | ✅       | Search-as-you-type against `/api/departments/search` scoped to the chosen university. Verified rows rank above unverified. Empty-query reveals the full department list. Unmatched input shows a "+ Add as new department" affordance (FR-DIR-05). |
+| `professor_name`        | Scoped typeahead                       | ✅       | Search-as-you-type against `/api/professors/search` scoped to (university, department). pg_trgm fuzzy match for typo-tolerance. Unmatched input shows a "+ Add 'xxxx' as a new professor" row that stages a new Professor on submit.               |
+| `course_code`           | Twin autocomplete (with `course_name`) | ✅       | Search-as-you-type against `/api/courses/search` scoped to the chosen department. Empty-query reveals the dept's full course list. Selecting any hit prepopulates BOTH `course_code` and `course_name`; both stay editable.                        |
+| `course_name`           | Twin autocomplete (with `course_code`) | ✅       | Shares the same dropdown as `course_code` — picking on either side prefills both. Unmatched input creates a new Course row on submit via `resolveCourse`'s find-or-create.                                                                         |
+| `teaching_quality`      | 1–5 stars                              | ✅       | "ক্লাসে কতটা ভালো পড়ান?"                                                                                                                                                                                                                          |
+| `grading_fairness`      | 1–5 stars                              | ✅       | "নম্বর দেওয়া কতটা ন্যায্য?"                                                                                                                                                                                                                       |
+| `course_difficulty`     | 1–5 stars                              | ✅       | "কোর্সটা কতটা কঠিন?"                                                                                                                                                                                                                               |
+| `attendance_strictness` | 1–5                                    | ✅       | "অ্যাটেনডেন্স কতটা কড়া?" (1 = not strict, 5 = very strict)                                                                                                                                                                                        |
+| `would_recommend`       | Boolean                                | ✅       | "আবার এই স্যার/ম্যামের এই কোর্স নেবেন?" — Yes / No                                                                                                                                                                                                 |
+| `review_text`           | Textarea                               | ❌       | Optional, max 500 characters, min 20 if provided                                                                                                                                                                                                   |
+| `tags`                  | Multi-select                           | ❌       | See tag list below                                                                                                                                                                                                                                 |
+
+**FR-REV-01a — Cascading typeahead scope:** Switching `university` shall clear both the `department` and `professor_name` selections (a department is scoped to a university). Switching `department` shall clear `professor_name` (a professor is scoped to a department). When the user picks "Add as new department", the `professor_name` field falls back to a plain text input — no `department_id` exists yet to scope a typeahead against, and both the department and the professor are auto-created on submit.
+
+**FR-REV-01b — Hierarchical auto-create on submit:** `POST /api/reviews` shall resolve the (department, professor, course) triple in that order. Each layer accepts either an id (already known) or a name (auto-create). Auto-created departments default to `status='unverified'`; auto-created professors default to `status='unverified'`; auto-created courses have no status field (their structured course code makes duplicates rare and the admin merge-departments tool already covers the harder case).
 
 > **Note:** `semester` has been removed entirely from MVP. All reviews for the same professor + course are pooled together regardless of when they were submitted (Option 2: auto-aggregate). Semester tracking is deferred to Phase 2.
 
@@ -612,13 +627,21 @@ created_at      TIMESTAMP DEFAULT NOW()
 ```sql
 id              SERIAL PRIMARY KEY
 university_id   INTEGER REFERENCES universities(id)
-name_en         VARCHAR(200) NOT NULL               -- "Computer Science & Engineering"
-name_bn         VARCHAR(200)                        -- "কম্পিউটার সায়েন্স"
-short_name      VARCHAR(20)                         -- "CSE"
+name_en         VARCHAR(200) NOT NULL                          -- "Computer Science & Engineering"
+name_bn         VARCHAR(200)                                   -- "কম্পিউটার সায়েন্স"
+short_name      VARCHAR(20)                                    -- "CSE" — nullable; user-typed full names may not have one
+slug            VARCHAR(50)                                    -- "cse" — URL-safe form
+status          department_status NOT NULL DEFAULT 'unverified'
+                -- ENUM('verified', 'unverified'). Seed-curated rows + admin-created
+                -- rows + merge-tool targets are 'verified'. Reviewer auto-created
+                -- rows start 'unverified' until an admin verifies or merges them.
 created_at      TIMESTAMP DEFAULT NOW()
 
 UNIQUE(university_id, short_name)
+UNIQUE(university_id, slug)
 ```
+
+> Migration `20260609193125_add_department_status` introduced the `status` column. Seed sets curated rows to `verified` on every run.
 
 #### `professors`
 
@@ -812,28 +835,29 @@ INDEX(professor_course_id, submitted_at DESC)
 
 ### Public Routes
 
-| Route                                     | Page                    | Description                                                                        |
-| ----------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
-| `/`                                       | Homepage                | Search bar, site stats, recently reviewed, top professors                          |
-| `/universities`                           | University list         | All universities with review counts                                                |
-| `/universities/[slug]`                    | University page         | Departments list, top professors                                                   |
-| `/universities/[slug]/[dept-slug]`        | Department page         | All professors in dept, sortable                                                   |
-| `/professors/[slug]`                      | Professor profile       | All courses this professor has been reviewed for, with per-course aggregate scores |
-| `/professors/[slug]/[course-slug]`        | Professor + course page | All reviews for this specific professor teaching this specific course              |
-| `/professors/[slug]/[course-slug]/review` | Review form             | Submit a review pre-filled with professor + course                                 |
-| `/review/new`                             | New review form         | Start from scratch — select university → dept → professor → course                 |
-| `/search?q=`                              | Search results          | Results across professors, courses, universities                                   |
-| `/about`                                  | About page              | Mission, privacy policy, how anonymity works                                       |
+| Route                                     | Page                    | Description                                                                                                                             |
+| ----------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                       | Homepage                | Search bar, site stats, recently reviewed, top professors                                                                               |
+| `/universities`                           | University list         | All universities with review counts                                                                                                     |
+| `/universities/[slug]`                    | University page         | Departments list, top professors                                                                                                        |
+| `/universities/[slug]/[dept-slug]`        | Department page         | All professors in dept, sortable                                                                                                        |
+| `/professors/[slug]`                      | Professor profile       | All courses this professor has been reviewed for, with per-course aggregate scores                                                      |
+| `/professors/[slug]/[course-slug]`        | Professor + course page | All reviews for this specific professor teaching this specific course                                                                   |
+| `/professors/[slug]/[course-slug]/review` | Review form             | Submit a review pre-filled with professor + course                                                                                      |
+| `/review/new`                             | New review form         | Select university → typeahead dept → typeahead professor → twin-autocomplete course code/name. Any layer can be auto-created on submit. |
+| `/search?q=`                              | Search results          | Results across professors, courses, universities                                                                                        |
+| `/about`                                  | About page              | Mission, privacy policy, how anonymity works                                                                                            |
 
 ### Admin Routes (Protected)
 
-| Route                 | Page                                        |
-| --------------------- | ------------------------------------------- |
-| `/admin`              | Dashboard — recent reviews, pending reports |
-| `/admin/reports`      | Reported reviews queue                      |
-| `/admin/professors`   | Professor management                        |
-| `/admin/universities` | University + department management          |
-| `/admin/reviews/[id]` | Single review detail + delete/hide action   |
+| Route                      | Page                                                                    |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `/admin`                   | Dashboard — recent reviews, pending reports                             |
+| `/admin/reports`           | Reported reviews queue                                                  |
+| `/admin/professors`        | Professor management                                                    |
+| `/admin/universities`      | University list                                                         |
+| `/admin/universities/[id]` | University detail — edit fields, add/edit/merge departments (FR-DIR-06) |
+| `/admin/reviews/[id]`      | Single review detail + delete/hide action                               |
 
 ---
 
@@ -850,10 +874,28 @@ GET  /api/universities
 GET  /api/universities/:slug/departments
      → Returns departments for a university
 
-GET  /api/professors/search?q=&university=&department=
-     → Full-text search across professors
-     → Returns: id, slug, name_en, name_bn, university, department,
-                overall_score, total_review_count, course_count, top_tags[]
+GET  /api/professors/search?q=&university_id=&department_id=&limit=
+     → Scoped typeahead — for the review form's professor field.
+     → pg_trgm + ILIKE over name_en / name_bn. Requires both
+       university_id and department_id; ranks by trgm score then review_count.
+     → Returns: { results: [{ id, slug, name_en, name_bn, designation, review_count }, ...] }
+
+GET  /api/departments/search?q=&university_id=&limit=
+     → Scoped typeahead — for the review form's department field.
+     → pg_trgm + ILIKE over short_name / name_en. Empty q returns the full
+       dept list for the chosen university. Verified rows rank above unverified.
+     → Returns: { results: [{ id, slug, name_en, name_bn, short_name, status, professor_count }, ...] }
+
+GET  /api/courses/search?q=&department_id=&limit=
+     → Scoped twin-autocomplete — drives both course_code and course_name fields.
+     → pg_trgm + ILIKE over course_code / course_name. Empty q returns the dept's full
+       course list. Selecting a hit on the client prepopulates both fields.
+     → Returns: { results: [{ id, course_code, course_name, slug, review_count }, ...] }
+
+GET  /api/search?q=&limit=
+     → Cross-entity homepage/navbar search (universities + departments + professors).
+     → UNION ALL with similarity ranking; min 2 chars.
+     → Returns: { results: [{ kind, id, slug, title, subtitle, href, score }, ...] }
 
 GET  /api/professors/:slug
      → Professor profile
@@ -868,13 +910,21 @@ GET  /api/professors/:slug/:course-slug/reviews?page=1&per_page=10
 POST /api/reviews
      Auth: required (returns 401 if not logged in)
      Body: {
-       professor_id,
-       course_code,
+       // Path A — known professor
+       professor_id?,
+
+       // Path B — auto-create one or more layers
+       university_id?,
+       department_id?,            // OR department_name_en (auto-create)
+       department_name_en?,
+       department_short_name?,    // optional explicit acronym from the typeahead's add-new form
+       professor_name_en?,
+       professor_name_bn?,
+
+       // Always required
+       course_code?,
        course_name,
-       teaching_quality,
-       grading_fairness,
-       course_difficulty,
-       attendance_strictness,
+       teaching_quality, grading_fairness, course_difficulty, attendance_strictness,
        would_recommend,
        review_text?,
        tags[],
@@ -883,17 +933,23 @@ POST /api/reviews
      Server logic:
        1. Verify session — reject 401 if not logged in
        2. Validate honeypot is empty
-       3. Check review_submissions: has this user already reviewed this professor+course?
+       3. Run keyword moderation (hard-block returns 400; soft-flag still writes)
+       4. Resolve DEPARTMENT — by id, or find-or-create by (university_id, parsed name).
+          New rows land as status='unverified'. Skipped if professor_id given.
+       5. Resolve PROFESSOR — by id, or find-or-create by (university_id, department_id, name_en).
+          New rows land as status='unverified'.
+       6. Resolve COURSE — find-or-create by (department_id, course_code) — code wins as the
+          unique key; if absent, match on (department_id, course_name).
+       7. Find-or-create the professor_courses join row
+       8. Check review_submissions: has this user already reviewed this professor+course?
           └── Yes → reject 409 "আপনি এই কোর্সে ইতিমধ্যে রিভিউ দিয়েছেন"
-       4. Run keyword moderation check
-       5. Find or create `courses` record
-       6. Find or create `professor_courses` record
-       7. BEGIN TRANSACTION:
+       9. BEGIN TRANSACTION:
           a. INSERT into reviews (no user_id)
           b. INSERT into review_submissions (user_id, professor_course_id)
           c. UPDATE running averages on professor_courses
           COMMIT
-     Response: 201 { message: "রিভিউ জমা হয়েছে" }
+       10. Invalidate caches (stats:site + prof:<slug>)
+     Response: 201 { message, professor_slug, moderation_status }
 
 POST /api/reports
      Body: { review_id, reason, details? }
@@ -930,7 +986,13 @@ PATCH  /api/admin/reviews/:id/status      Body: { status: 'visible' | 'hidden' }
 POST   /api/admin/professors              Body: professor data
 PATCH  /api/admin/professors/:id
 POST   /api/admin/universities            Body: university data
-POST   /api/admin/departments             Body: department data
+PATCH  /api/admin/universities/:id
+POST   /api/admin/universities/:id/departments    Body: { name_en, name_bn?, short_name?, slug? }
+PATCH  /api/admin/departments/:id         Body: partial department fields
+POST   /api/admin/departments/merge       Body: { target_id, source_ids[] }
+                                           Transactional: same-uni check → repoint
+                                           professors + courses → mark target verified
+                                           → delete sources. (FR-DIR-06)
 ```
 
 ---
