@@ -6,7 +6,7 @@
 
 ---
 
-**Version:** 1.5  
+**Version:** 1.6  
 **Status:** Draft  
 **Last Updated:** July 2026  
 **Changelog:**
@@ -15,6 +15,7 @@
 - v1.2 — Helpful/upvote system added (login required to vote). Lightweight Google OAuth added for voters only. Soft moderation (Approach 2) confirmed.
 - v1.3 — **Core philosophy change:** Login (Google OAuth) required to submit reviews AND vote. Reading remains fully public. Anonymity preserved by never storing `user_id` on the `reviews` record — a separate `review_submissions` table tracks who reviewed which professor+course without exposing review content. IP rate limiting replaced by one-review-per-professor-course-per-account enforcement.
 - v1.4 — **Catalog scope-up + crowdsourced extensions.** University seed grew from 20 to **161 Wikipedia-sourced entries** (every BD university with canonical acronym + Bangla name + city). Departments are no longer admin-only — the review form now lets students add a new department inline via a two-field micro-form (Acronym + Full name); rows land as `status='unverified'` and surface in a new admin **merge-departments** tool. Course code and course name fields became a twin autocomplete that prepopulates both fields from one pick. Professor selection became a scoped typeahead. The static `<select>` dropdowns for university/department are gone.
+- v1.6 — **Deployment path locked in.** Production stack is Vercel Hobby (Mumbai edge) + Neon Postgres (ap-south-1) + Upstash Redis (ap-south-1) — all free-tier. Prisma schema now carries `directUrl` so Neon's pooler works with migrations. Redis client made optional (falls back to no-cache when `REDIS_URL` is unset). `docker-compose.prod.yml` and the VPS runbook stay in the repo as an escape hatch.
 - v1.5 — **Reviewer-requested universities.** The uni field is now a scoped typeahead, and reviewers whose university isn't in the catalog can file a request ticket (name + Bangla name + type) via a new `UniversityRequest` table. Unlike departments, universities require admin approval before they appear in the directory. New `/admin/university-requests` queue with approve (creates the row, admin polishes short_name/slug/city first) and reject (with note) actions.
 
 ---
@@ -1068,17 +1069,19 @@ POST   /api/admin/university-requests/:id/resolve
 
 ### Recommended Stack
 
-| Layer             | Technology                            | Reason                                                                                |
-| ----------------- | ------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Framework**     | Next.js 14+ (App Router)              | SSG/ISR for professor pages, API routes built-in, SEO-friendly                        |
-| **Language**      | TypeScript                            | Type safety, better DX with Cursor/Claude Code                                        |
-| **Database**      | PostgreSQL                            | Relational, handles aggregations well, strong ecosystem                               |
-| **ORM**           | Prisma                                | Type-safe queries, great with TypeScript, easy migrations                             |
-| **Auth**          | NextAuth.js v5 (Google provider only) | Handles Google OAuth session management; minimal config; only used for helpful voting |
-| **Hosting — App** | Vercel                                | Free tier sufficient for MVP, seamless Next.js deployment                             |
-| **Hosting — DB**  | Supabase (Postgres) or Railway        | Free/cheap Postgres, Supabase has generous free tier                                  |
-| **Styling**       | Tailwind CSS                          | Fast utility-first, good for Bangla text rendering                                    |
-| **Analytics**     | Umami (self-hosted) or Plausible      | Privacy-first, no cookies, no personal data                                           |
+| Layer               | Technology                                 | Reason                                                                                                                       |
+| ------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Framework**       | Next.js 14+ (App Router)                   | SSG/ISR for professor pages, API routes built-in, SEO-friendly                                                               |
+| **Language**        | TypeScript                                 | Type safety, better DX with Cursor/Claude Code                                                                               |
+| **Database**        | PostgreSQL                                 | Relational, handles aggregations well, strong ecosystem                                                                      |
+| **ORM**             | Prisma                                     | Type-safe queries, great with TypeScript, easy migrations                                                                    |
+| **Auth**            | NextAuth.js v5 (Google provider only)      | Handles Google OAuth session management; minimal config; only used for helpful voting                                        |
+| **Hosting — App**   | Vercel Hobby (region `bom1` — Mumbai)      | Free tier sufficient for MVP, seamless Next.js deployment, Mumbai edge for BD latency. See `docs/deployment/vercel-neon.md`. |
+| **Hosting — DB**    | Neon (Postgres, ap-south-1 Mumbai)         | Free tier: 0.5 GB storage + 7-day PITR. Auto-suspend when idle. Pooled + direct URLs for Prisma.                             |
+| **Hosting — Cache** | Upstash Redis (ap-south-1)                 | Optional; free tier 500 k commands/mo. App falls back to no-cache when `REDIS_URL` is unset.                                 |
+| **VPS fallback**    | Docker Compose (`docker-compose.prod.yml`) | Escape hatch if the app ever needs to leave the managed stack. See `docs/deployment/runbook.md`.                             |
+| **Styling**         | Tailwind CSS                               | Fast utility-first, good for Bangla text rendering                                                                           |
+| **Analytics**       | Umami (self-hosted) or Plausible           | Privacy-first, no cookies, no personal data                                                                                  |
 
 ### Why Not...
 

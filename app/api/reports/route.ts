@@ -22,8 +22,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { redis } from '@/lib/redis'
-import { deleteCache, CACHE_KEYS } from '@/lib/redis'
+import { acquireOnce, deleteCache, redis, CACHE_KEYS } from '@/lib/redis'
 import { reportSchema } from '@/lib/validations/review'
 import {
   AUTO_HIDE_THRESHOLD,
@@ -73,19 +72,11 @@ export async function POST(req: Request) {
   }
 
   // ── 4. Dedup via Redis ────────────────────────────────────────────────────
-  // SET key value NX EX ttl  → atomically "set if not exists" with TTL.
-  // ioredis returns 'OK' on success, null if the key already existed.
+  // acquireOnce is atomic SET NX with a TTL. When REDIS_URL is unset or Redis
+  // is down it returns true (assume first-time) — the SQL side of the app will
+  // still catch straight-up duplicates via the (user_id, review_id) unique key.
   const dedupKey = reportDedupKey(userId, reviewId)
-  let isFirstReport = false
-  try {
-    const setResult = await redis.set(dedupKey, '1', 'EX', REPORT_DEDUP_TTL_SECONDS, 'NX')
-    isFirstReport = setResult === 'OK'
-  } catch (err) {
-    // If Redis is down, fall through and let the DB write happen. Worst case:
-    // a determined user can game the count, which the admin will catch.
-    console.warn('[reports] Redis dedup failed, proceeding without dedup:', err)
-    isFirstReport = true
-  }
+  const isFirstReport = await acquireOnce(dedupKey, REPORT_DEDUP_TTL_SECONDS)
 
   if (!isFirstReport) {
     // Idempotent — pretend we accepted it. Don't leak the dedup mechanism.
@@ -120,10 +111,12 @@ export async function POST(req: Request) {
     })
   } catch (err) {
     // Roll back the Redis dedup if the DB write failed, so the user can retry.
-    try {
-      await redis.del(dedupKey)
-    } catch {
-      // Swallow — Redis already noisy on the way in.
+    if (redis) {
+      try {
+        await redis.del(dedupKey)
+      } catch {
+        // Swallow — Redis already noisy on the way in.
+      }
     }
     console.error('[reports] write failed:', err)
     return NextResponse.json({ error: (await getStrings()).errors.serverError }, { status: 500 })

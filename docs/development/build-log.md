@@ -598,6 +598,8 @@ As features are completed, add them here for quick lookup.
 | Admin university-request queue | `app/admin/university-requests/*` | Status-tab filter (pending/approved/rejected). Approve panel lets admin polish short_name/slug/location_city before publishing; reject panel takes a note. Dashboard adds a live "University requests" action card. |
 | Admin resolve endpoint | `app/api/admin/university-requests/[id]/resolve/route.ts` | Transactional — approve creates the University row inside the same tx as flipping the request to `approved`; reject just flips status. Unique-constraint clashes surface as 409 with a targeted error. |
 | UniversityRequest schema | `prisma/schema.prisma`, migration `20260710_add_university_requests` | New table + `UniversityRequestStatus` enum. FK to `users.id` with cascade delete. |
+| Vercel deployment prep | `vercel.json`, `package.json` (`vercel-build`, `postinstall`), `prisma/schema.prisma` (`directUrl`), `lib/redis.ts` (nullable client + `acquireOnce`), `.env.example` | Region-pinned to `bom1` (Mumbai). Migrations run as `prisma migrate deploy` inside the build step; failed migrations abort the deploy. Redis is now optional — the app boots without `REDIS_URL` and degrades to no-cache. |
+| Deployment walkthrough | `docs/deployment/vercel-neon.md` | End-to-end guide: Neon signup → Upstash → Google OAuth prod creds → Vercel env vars → first-time seed → domain → uptime monitor. Documents tier limits and when to fall back to the VPS path. |
 
 ### Planned Features (from SRS)
 

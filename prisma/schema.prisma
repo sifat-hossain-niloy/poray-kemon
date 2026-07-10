@@ -5,6 +5,12 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Neon (and other poolers like Supavisor / PgBouncer) require migrations
+  // to talk to the primary directly. Runtime queries use the pooled url; the
+  // Prisma CLI (migrate deploy, migrate dev) uses directUrl. If DIRECT_URL
+  // isn't set (e.g. self-hosted Postgres, integration tests), Prisma falls
+  // back to url — so this line is safe to include in every environment.
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
