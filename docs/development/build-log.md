@@ -592,6 +592,12 @@ As features are completed, add them here for quick lookup.
 | Add-new-department micro-form | `components/review/DepartmentTypeahead.tsx` (the `NewDepartmentForm` sub-component) | Tapping "+ Add as new" opens a two-field inline form (Acronym + Full name) prefilled by parsing the typed query. The user explicitly confirms both fields, so we never guess at the split. New rows still land as `status='unverified'` and an admin verifies/merges via the existing tool. |
 | Course search API | `app/api/courses/search/route.ts` | Scoped to a single department; pg_trgm + ILIKE across both `course_code` and `course_name`; returns `review_count` per course |
 | Course twin-autocomplete fields | `components/review/CourseFields.tsx` | Shared debounced search drives a dropdown from either the code or name input; picking a hit prepopulates BOTH fields ("CSE 301" → also fills "Data Structures"); both stay editable. No "Add as new" UI — the review POST handler already auto-creates the course row on submit when the code/name combo is new. |
+| University search API | `app/api/universities/search/route.ts` | pg_trgm + ILIKE over short_name / name_en / name_bn; empty-q returns the full catalog capped at 8. |
+| University typeahead + request form | `components/review/UniversityTypeahead.tsx` | Replaces the plain `<select>`. Unmatched input opens a "Request '<name>' as a new university" inline form (name_en + optional name_bn + type radio). Submission creates a UniversityRequest row and swaps the typeahead for a "request received" confirmation. |
+| POST /api/university-requests | `app/api/university-requests/route.ts` | Auth-gated. Rejects duplicates-with-real-uni (409), user's own pending duplicates (409), and > 5 pending per user (429). |
+| Admin university-request queue | `app/admin/university-requests/*` | Status-tab filter (pending/approved/rejected). Approve panel lets admin polish short_name/slug/location_city before publishing; reject panel takes a note. Dashboard adds a live "University requests" action card. |
+| Admin resolve endpoint | `app/api/admin/university-requests/[id]/resolve/route.ts` | Transactional — approve creates the University row inside the same tx as flipping the request to `approved`; reject just flips status. Unique-constraint clashes surface as 409 with a targeted error. |
+| UniversityRequest schema | `prisma/schema.prisma`, migration `20260710_add_university_requests` | New table + `UniversityRequestStatus` enum. FK to `users.id` with cascade delete. |
 
 ### Planned Features (from SRS)
 

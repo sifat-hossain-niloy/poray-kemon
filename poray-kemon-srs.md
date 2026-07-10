@@ -6,15 +6,16 @@
 
 ---
 
-**Version:** 1.4  
+**Version:** 1.5  
 **Status:** Draft  
-**Last Updated:** June 2026  
+**Last Updated:** July 2026  
 **Changelog:**
 
 - v1.1 — Review model changed to professor + course combo (Model B), auto-aggregated per course (Option 2). Semester field removed from MVP. `professor_courses` join table added.
 - v1.2 — Helpful/upvote system added (login required to vote). Lightweight Google OAuth added for voters only. Soft moderation (Approach 2) confirmed.
 - v1.3 — **Core philosophy change:** Login (Google OAuth) required to submit reviews AND vote. Reading remains fully public. Anonymity preserved by never storing `user_id` on the `reviews` record — a separate `review_submissions` table tracks who reviewed which professor+course without exposing review content. IP rate limiting replaced by one-review-per-professor-course-per-account enforcement.
 - v1.4 — **Catalog scope-up + crowdsourced extensions.** University seed grew from 20 to **161 Wikipedia-sourced entries** (every BD university with canonical acronym + Bangla name + city). Departments are no longer admin-only — the review form now lets students add a new department inline via a two-field micro-form (Acronym + Full name); rows land as `status='unverified'` and surface in a new admin **merge-departments** tool. Course code and course name fields became a twin autocomplete that prepopulates both fields from one pick. Professor selection became a scoped typeahead. The static `<select>` dropdowns for university/department are gone.
+- v1.5 — **Reviewer-requested universities.** The uni field is now a scoped typeahead, and reviewers whose university isn't in the catalog can file a request ticket (name + Bangla name + type) via a new `UniversityRequest` table. Unlike departments, universities require admin approval before they appear in the directory. New `/admin/university-requests` queue with approve (creates the row, admin polishes short_name/slug/city first) and reject (with note) actions.
 
 ---
 
@@ -201,6 +202,27 @@ Both fields are pre-filled by parsing the user's typed query (`"CSE - Computer S
 4. Delete the source rows.
 
 The endpoint shall reject merges where the target appears in the source list.
+
+**FR-DIR-07 — Reviewer-requested universities:** The review submission form's university field is a scoped typeahead (FR-REV-01) backed by `/api/universities/search`. If the reviewer's typed input doesn't match any existing university, a "Request '<name>' as a new university" affordance shall appear at the bottom of the dropdown. Activating it opens an inline micro-form:
+
+| Field                | Required | Notes                                                 |
+| -------------------- | -------- | ----------------------------------------------------- |
+| University name (EN) | ✅       | 2–200 chars. Pre-filled from the typed query.         |
+| Bangla name          | ❌       | Optional at request time; an admin can fill it later. |
+| Type                 | ✅       | Radio: `public` / `private` / `international`.        |
+
+Submitting the form calls `POST /api/university-requests` and creates a `UniversityRequest` row with `status='pending'`. Unlike departments (FR-DIR-05), universities are **NOT** auto-created — the review submission cannot proceed until an admin approves the request. The user sees a "Request sent — an admin will review it" confirmation card in place of the typeahead.
+
+**Rate limits:**
+
+- Per-user: 5 pending requests at a time (`429 TOO_MANY_PENDING`).
+- Per-user duplicates: identical name (case- and formatting-insensitive) returns `409 DUPLICATE_REQUEST` with the existing request id.
+- Already-a-real-uni: if the requested name matches an existing university row, the endpoint returns `409 ALREADY_EXISTS` with the existing slug so the client can nudge the user back into the typeahead.
+
+**FR-DIR-08 — Admin queue for university requests:** Admins shall have a `/admin/university-requests` queue that lists pending requests oldest-first. The admin dashboard shall show a live count of `pending` requests as an action card. For each pending row, the admin can:
+
+- **Approve** — opens an inline polish panel to override the auto-suggested `short_name`, `slug`, and `location_city` before publishing. `POST /api/admin/university-requests/[id]/resolve` with `action='approve'` creates the University row and flips the request to `status='approved'` in one transaction. Unique-constraint clashes (e.g. taken short_name) return 409 with a targeted error message so the admin can retry.
+- **Reject** — flips the request to `status='rejected'` with an optional admin note surfaced back to the requester. No side effects on other tables.
 
 ---
 
@@ -775,6 +797,25 @@ UNIQUE(user_id, professor_course_id)
 -- It does NOT tell us what they wrote — that's in reviews with no user_id.
 ```
 
+#### `university_requests`
+
+```sql
+id           SERIAL PRIMARY KEY
+user_id      UUID REFERENCES users(id) ON DELETE CASCADE
+name_en      VARCHAR(200) NOT NULL
+name_bn      VARCHAR(200)
+type         university_type NOT NULL              -- ENUM public|private|international
+status       uni_request_status NOT NULL DEFAULT 'pending'
+                                                    -- ENUM pending|approved|rejected
+admin_note   VARCHAR(500)                            -- surfaces back to the requester
+created_at   TIMESTAMP DEFAULT NOW()
+resolved_at  TIMESTAMP
+
+INDEX(status)                                       -- admin queue reads pending fast
+```
+
+Introduced by migration `20260710_add_university_requests`. Approving a row via `POST /api/admin/university-requests/[id]/resolve` creates the corresponding `universities` row in the same transaction; rejecting just flips the status and (optionally) captures a note.
+
 #### `users`
 
 ```sql
@@ -850,14 +891,15 @@ INDEX(professor_course_id, submitted_at DESC)
 
 ### Admin Routes (Protected)
 
-| Route                      | Page                                                                    |
-| -------------------------- | ----------------------------------------------------------------------- |
-| `/admin`                   | Dashboard — recent reviews, pending reports                             |
-| `/admin/reports`           | Reported reviews queue                                                  |
-| `/admin/professors`        | Professor management                                                    |
-| `/admin/universities`      | University list                                                         |
-| `/admin/universities/[id]` | University detail — edit fields, add/edit/merge departments (FR-DIR-06) |
-| `/admin/reviews/[id]`      | Single review detail + delete/hide action                               |
+| Route                        | Page                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `/admin`                     | Dashboard — recent reviews, pending reports                                                         |
+| `/admin/reports`             | Reported reviews queue                                                                              |
+| `/admin/professors`          | Professor management                                                                                |
+| `/admin/universities`        | University list                                                                                     |
+| `/admin/universities/[id]`   | University detail — edit fields, add/edit/merge departments (FR-DIR-06)                             |
+| `/admin/university-requests` | Reviewer-submitted uni request queue — approve (creates the row) or reject (with note). (FR-DIR-08) |
+| `/admin/reviews/[id]`        | Single review detail + delete/hide action                                                           |
 
 ---
 
@@ -873,6 +915,23 @@ GET  /api/universities
 
 GET  /api/universities/:slug/departments
      → Returns departments for a university
+
+GET  /api/universities/search?q=&limit=
+     → Scoped typeahead — for the review form's university field.
+     → pg_trgm + ILIKE over short_name / name_en / name_bn. Empty q returns
+       the full uni catalog (capped).
+     → Returns: { results: [{ id, slug, name_en, name_bn, short_name, type, location_city }, ...] }
+
+POST /api/university-requests
+     Auth: required (returns 401 if not logged in)
+     Body: { nameEn, nameBn?, type: 'public'|'private'|'international' }
+     Server logic:
+       1. Verify session — reject 401
+       2. Reject 409 if a real University with the same name/short_name exists
+       3. Reject 409 if this user already has a pending request with the same normalised name
+       4. Reject 429 if this user already has ≥ 5 pending requests
+       5. Create UniversityRequest with status='pending'
+     Response: 201 { request: { id, nameEn, type, status, createdAt } }
 
 GET  /api/professors/search?q=&university_id=&department_id=&limit=
      → Scoped typeahead — for the review form's professor field.
@@ -993,6 +1052,14 @@ POST   /api/admin/departments/merge       Body: { target_id, source_ids[] }
                                            Transactional: same-uni check → repoint
                                            professors + courses → mark target verified
                                            → delete sources. (FR-DIR-06)
+GET    /api/admin/university-requests?status=pending    (page-rendered; no dedicated JSON endpoint yet)
+POST   /api/admin/university-requests/:id/resolve
+                                           Body: { action: 'approve'|'reject',
+                                                   admin_note?,
+                                                   short_name?, slug?, location_city? }
+                                           On approve: creates University in a single tx
+                                           and flips request to 'approved'. On reject:
+                                           flips to 'rejected' with the admin_note. (FR-DIR-08)
 ```
 
 ---

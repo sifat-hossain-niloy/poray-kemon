@@ -10,14 +10,9 @@ import { Badge } from '@/components/ui/badge'
 import { ProfessorTypeahead, type ProfessorSelection } from './ProfessorTypeahead'
 import { DepartmentTypeahead, type DepartmentSelection } from './DepartmentTypeahead'
 import { CourseFields } from './CourseFields'
+import { UniversityTypeahead, type UniversitySelection } from './UniversityTypeahead'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-interface University {
-  id: number
-  nameEn: string
-  shortName: string
-}
 
 interface PreselectedProfessor {
   id: number
@@ -25,12 +20,15 @@ interface PreselectedProfessor {
   universityId: number
   departmentId: number
   department: { nameEn: string; shortName: string | null } | null
+  university: { nameEn: string; shortName: string } | null
 }
 
 interface Props {
-  universities: University[]
   preselectedProfessor: PreselectedProfessor | null
   displayName: string
+  /** True when the user has a Google session — controls whether the
+   *  university-request affordance can even open. */
+  isAuthenticated: boolean
 }
 
 // Tag KEYS are the Bangla identifiers — the persisted data model. Use BN as
@@ -44,7 +42,7 @@ type RatingKey =
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ReviewForm({ universities, preselectedProfessor, displayName }: Props) {
+export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated }: Props) {
   const router = useRouter()
   const strings = useStrings()
   const locale = useLocale()
@@ -58,9 +56,16 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
   ]
 
   // Professor / course
-  const [universityId, setUniversityId] = useState<number | ''>(
-    preselectedProfessor?.universityId ?? '',
+  const [universitySelection, setUniversitySelection] = useState<UniversitySelection | null>(
+    preselectedProfessor && preselectedProfessor.university
+      ? {
+          id: preselectedProfessor.universityId,
+          name_en: preselectedProfessor.university.nameEn,
+          short_name: preselectedProfessor.university.shortName,
+        }
+      : null,
   )
+  const universityId = universitySelection?.id ?? ''
   const [departmentSelection, setDepartmentSelection] = useState<DepartmentSelection | null>(
     preselectedProfessor && preselectedProfessor.department
       ? {
@@ -264,29 +269,23 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
           </div>
         ) : (
           <>
-            <Field label={`${strings.review.selectUniversity} *`}>
-              <select
-                value={universityId}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setUniversityId(v ? Number(v) : '')
-                  // A department is scoped to a university and a professor
-                  // is scoped to a (uni, dept) pair — invalidate both when
-                  // the university changes.
-                  setDepartmentSelection(null)
-                  setProfessorSelection(null)
-                }}
-                className={selectClass}
-                required
-              >
-                <option value="">{t.pickOne}</option>
-                {universities.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.shortName} — {u.nameEn}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <UniversityTypeahead
+              selection={universitySelection}
+              onSelect={(u) => {
+                setUniversitySelection(u)
+                // A department is scoped to a university and a professor is
+                // scoped to a (uni, dept) pair — invalidate both when the
+                // university changes.
+                setDepartmentSelection(null)
+                setProfessorSelection(null)
+              }}
+              onClear={() => {
+                setUniversitySelection(null)
+                setDepartmentSelection(null)
+                setProfessorSelection(null)
+              }}
+              isAuthenticated={isAuthenticated}
+            />
 
             {universityId ? (
               <DepartmentTypeahead
@@ -480,8 +479,6 @@ export function ReviewForm({ universities, preselectedProfessor, displayName }: 
 
 const inputClass =
   'w-full rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50'
-
-const selectClass = inputClass + ' cursor-pointer'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

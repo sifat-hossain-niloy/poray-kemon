@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Review-form polish — course autocomplete on top of department typeahead
-**Last updated:** June 2026 (Session 12)
-**Active branches:** `feat/course-autocomplete` (PR open, stacked on `feat/department-typeahead-with-add`)
+**Phase:** Reviewer-requested universities — typeahead + admin approval queue
+**Last updated:** July 2026 (Session 13)
+**Active branches:** `feat/university-requests` (PR open, stacked on `feat/course-autocomplete`)
 
 ---
 
@@ -182,6 +182,19 @@
 - [x] `components/review/CourseFields.tsx` — twin autocomplete inputs for code + name. Both share one search; focusing either opens the dropdown; picking a hit prepopulates BOTH fields ("CSE 301" → "Data Structures" auto-fills) but both stay freely editable.
 - [x] No "Add as new" UI for courses — `POST /api/reviews`'s existing `resolveCourse` helper already runs find-or-create on `(department_id, course_code)`. Course codes are inherently structured ("CSE 301") so duplication risk is low — no admin-verification dance needed.
 - [x] Autocomplete is disabled when the department is a brand-new (unsaved) one. The inputs fall back to plain text fields; the course gets auto-created on submit alongside the department.
+
+### Session 13 — reviewer-requested universities (`feat/university-requests`)
+
+- [x] Prisma: new `UniversityRequest` model + `UniversityRequestStatus` enum (`pending | approved | rejected`); migration `20260710_add_university_requests`. FK to `users.id` with cascade delete.
+- [x] `GET /api/universities/search?q=&limit=` — pg_trgm + ILIKE over short_name / name_en / name_bn; empty-q returns the full catalog capped at 8. Replaces the static uni list the form used to fetch.
+- [x] `POST /api/university-requests` — auth-gated ticket creation. Guards: existing-uni check (409 ALREADY_EXISTS + slug), per-user pending duplicates (409 DUPLICATE_REQUEST), ≥ 5 pending per user (429 TOO_MANY_PENDING).
+- [x] `components/review/UniversityTypeahead.tsx` — replaces the `<select>`. Same opaque debounced dropdown pattern as the dept typeahead. Unmatched input opens an inline form (name_en required, name_bn optional, type radio) that files a request; on success the typeahead is swapped for a "Request received — an admin will review" confirmation card. Sign-in fallback text when not authenticated.
+- [x] `ReviewForm.tsx` rewired: dropped the `universities` prop entirely (typeahead fetches on its own); `universitySelection` state carries `{ id, name_en, short_name }`; `isAuthenticated` prop threaded through so the request affordance can be disabled when signed out.
+- [x] `app/review/new/page.tsx` — no longer preloads the uni list. Only preloads the preselected professor's uni + dept when arriving via `?professor=<slug>`.
+- [x] `/admin/university-requests` — status-tab queue (pending/approved/rejected). Approve opens an inline polish panel (short_name / slug / location_city); reject opens a note field. Admin dashboard extended with a live "University requests" action card.
+- [x] `POST /api/admin/university-requests/[id]/resolve` — transactional. Approve creates the University row and flips the request status in one tx; reject just flips status with an optional note. Unique-constraint clashes → 409 with a targeted error so admins can retry with a different short_name/slug.
+- [x] SRS updated: version bumped to 1.5, new v1.5 changelog entry, FR-DIR-07 + FR-DIR-08 requirements added, FR-DIR-06 (merge tool) renumbered back to sit adjacent to FR-DIR-05, `university_requests` table added to §6, `/api/universities/search` + `/api/university-requests` + admin resolve endpoints added to §8, admin route added to §7.
+- [x] `pnpm typecheck` + `pnpm lint` clean; endpoints smoke-tested; browser preview of `/review/new` renders without console errors.
 
 ---
 

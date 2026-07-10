@@ -187,6 +187,28 @@ Tracks who reviewed which professor+course. **Decoupled from `reviews`.**
 
 ---
 
+### `university_requests`
+
+Reviewer-facing "please add this university" tickets. Populated when a student's university isn't in the catalog and they file a request via the review form's typeahead (FR-DIR-07). Approved rows become real `universities` rows in the same transaction; rejected rows keep the note for audit.
+
+| Column        | Type           | Constraints                   | Notes                                        |
+| ------------- | -------------- | ----------------------------- | -------------------------------------------- |
+| `id`          | `SERIAL`       | PK                            |                                              |
+| `user_id`     | `UUID`         | FK → users, ON DELETE CASCADE | Requester                                    |
+| `name_en`     | `VARCHAR(200)` | NOT NULL                      | English name as typed by the user            |
+| `name_bn`     | `VARCHAR(200)` |                               | Optional Bangla name                         |
+| `type`        | `ENUM`         | NOT NULL                      | `public` \| `private` \| `international`     |
+| `status`      | `ENUM`         | NOT NULL, DEFAULT `'pending'` | `pending` \| `approved` \| `rejected`        |
+| `admin_note`  | `VARCHAR(500)` |                               | Surfaces back to the requester once resolved |
+| `created_at`  | `TIMESTAMP`    | DEFAULT NOW()                 |                                              |
+| `resolved_at` | `TIMESTAMP`    |                               | Set when an admin approves or rejects        |
+
+**Index:** `status` — admin queue reads pending rows quickly.
+
+Introduced by migration `20260710_add_university_requests`. Per-user rate limit is enforced at the API layer (max 5 pending per user; duplicate normalised-name check), not in schema.
+
+---
+
 ### `users`
 
 | Column         | Type           | Constraints                   | Notes                            |

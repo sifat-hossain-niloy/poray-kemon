@@ -10,6 +10,7 @@ export default async function AdminDashboardPage() {
     pendingReports,
     softFlagged,
     flaggedHidden,
+    pendingUniversityRequests,
     totalReviews,
     totalProfessors,
     totalUniversities,
@@ -17,6 +18,7 @@ export default async function AdminDashboardPage() {
     db.report.count({ where: { status: 'pending' } }),
     db.review.count({ where: { moderationStatus: 'soft_flagged' } }),
     db.review.count({ where: { moderationStatus: 'flagged_hidden' } }),
+    db.universityRequest.count({ where: { status: 'pending' } }),
     db.review.count(),
     db.professor.count(),
     db.university.count(),
@@ -32,7 +34,7 @@ export default async function AdminDashboardPage() {
       </header>
 
       {/* Action queues */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <QueueCard
           href="/admin/reports"
           title={STRINGS.admin.pendingReports}
@@ -50,6 +52,12 @@ export default async function AdminDashboardPage() {
           title={STRINGS.admin.flaggedHidden}
           count={flaggedHidden}
           tone={flaggedHidden > 0 ? 'warn' : 'idle'}
+        />
+        <QueueCard
+          href="/admin/university-requests"
+          title="University requests"
+          count={pendingUniversityRequests}
+          tone={pendingUniversityRequests > 0 ? 'attention' : 'idle'}
         />
       </section>
 
