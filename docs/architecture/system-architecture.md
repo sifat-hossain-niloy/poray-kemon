@@ -69,8 +69,11 @@ All write operations go through **Next.js API Routes** at `/api/*`. Reads mostly
 - `GET /api/departments/search?q=&university_id=` — scoped typeahead for the review form's department field (FR-DIR-05)
 - `GET /api/professors/search?q=&university_id=&department_id=` — scoped typeahead for the review form's professor field
 - `GET /api/courses/search?q=&department_id=` — twin-autocomplete that drives both course-code and course-name fields
+- `GET /api/universities/search?q=` — scoped typeahead for the review form's university field
+- `POST /api/university-requests` — reviewer-facing "please add this uni" ticket (FR-DIR-07); auth-gated, rate-limited
 - `GET /api/search?q=` — cross-entity search for the homepage/navbar (universities + departments + professors UNION ALL)
 - `POST /api/admin/departments/merge` — transactional merge of duplicate department rows (FR-DIR-06)
+- `POST /api/admin/university-requests/[id]/resolve` — approve (creates University row in one tx) or reject (with optional note) a reviewer request (FR-DIR-08)
 - `/api/auth/*` — NextAuth endpoints
 - `/api/admin/*` — admin actions (session-gated by `middleware.ts`)
 

@@ -54,28 +54,23 @@ export default async function NewReviewPage({ searchParams }: PageProps) {
     )
   }
 
-  // Departments are no longer fetched here — the form's DepartmentTypeahead
-  // hits /api/departments/search on demand. We only need the university list
-  // for the dropdown and, when preselected, the department's name fields so
-  // the picker can show a locked-in card.
-  const [universities, preselected] = await Promise.all([
-    db.university.findMany({
-      orderBy: { shortName: 'asc' },
-      select: { id: true, nameEn: true, shortName: true },
-    }),
-    preselectSlug
-      ? db.professor.findUnique({
-          where: { slug: preselectSlug },
-          select: {
-            id: true,
-            nameEn: true,
-            universityId: true,
-            departmentId: true,
-            department: { select: { nameEn: true, shortName: true } },
-          },
-        })
-      : Promise.resolve(null),
-  ])
+  // All three pickers (university, department, professor) now fetch on the
+  // client via their own /api/*/search endpoints. This page only pre-loads
+  // the preselected professor's full context so the form can render its
+  // locked-in cards without a client round-trip.
+  const preselected = preselectSlug
+    ? await db.professor.findUnique({
+        where: { slug: preselectSlug },
+        select: {
+          id: true,
+          nameEn: true,
+          universityId: true,
+          departmentId: true,
+          department: { select: { nameEn: true, shortName: true } },
+          university: { select: { nameEn: true, shortName: true } },
+        },
+      })
+    : null
 
   const helpPrefix = locale === 'en' ? 'Need help? See ' : 'কোনো সমস্যা হলে? '
   const helpLink = locale === 'en' ? 'About us' : 'আমাদের সম্পর্কে'
@@ -89,9 +84,9 @@ export default async function NewReviewPage({ searchParams }: PageProps) {
       </div>
 
       <ReviewForm
-        universities={universities}
         preselectedProfessor={preselected}
         displayName={session.user.name ?? ''}
+        isAuthenticated
       />
 
       <p className="mt-8 text-center text-xs text-muted-foreground">

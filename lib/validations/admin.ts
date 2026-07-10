@@ -44,7 +44,27 @@ export const departmentUpdateSchema = departmentCreateSchema
     message: 'At least one field is required',
   })
 
+// Reviewer-submitted request to add a university that's not in the catalog.
+// The admin queue turns approved rows into real `universities` records.
+export const universityRequestCreateSchema = z.object({
+  nameEn: z.string().trim().min(2).max(200),
+  nameBn: z.string().trim().max(200).optional().or(z.literal('')),
+  type: z.enum(['public', 'private', 'international']),
+})
+
+export const universityRequestResolveSchema = z.object({
+  action: z.enum(['approve', 'reject']),
+  admin_note: z.string().trim().max(500).optional(),
+  // Optional overrides on approve — admin can polish the requester's input
+  // before it becomes a canonical university row.
+  short_name: z.string().trim().min(1).max(20).optional(),
+  slug: slug.optional(),
+  location_city: z.string().trim().max(100).optional().or(z.literal('')),
+})
+
 export type UniversityCreateInput = z.infer<typeof universityCreateSchema>
 export type UniversityUpdateInput = z.infer<typeof universityUpdateSchema>
 export type DepartmentCreateInput = z.infer<typeof departmentCreateSchema>
 export type DepartmentUpdateInput = z.infer<typeof departmentUpdateSchema>
+export type UniversityRequestCreateInput = z.infer<typeof universityRequestCreateSchema>
+export type UniversityRequestResolveInput = z.infer<typeof universityRequestResolveSchema>

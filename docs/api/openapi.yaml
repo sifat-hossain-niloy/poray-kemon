@@ -448,6 +448,107 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /universities/search:
+    get:
+      tags: [Universities]
+      summary: Search universities (review-form typeahead)
+      description: |
+        Scoped fuzzy search used by the review form's university field.
+        pg_trgm + ILIKE over short_name / name_en / name_bn. Empty `q`
+        returns the full catalog (capped) so the dropdown is useful on
+        focus.
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          example: 'BUET'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 8
+            maximum: 30
+      responses:
+        '200':
+          description: University results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        slug: { type: string }
+                        name_en: { type: string }
+                        name_bn: { type: string, nullable: true }
+                        short_name: { type: string }
+                        type:
+                          type: string
+                          enum: [public, private, international]
+                        location_city: { type: string, nullable: true }
+
+  /university-requests:
+    post:
+      tags: [Universities]
+      summary: File a "please add this university" ticket
+      description: |
+        Reviewer-facing endpoint (auth required) for requesting a
+        university that isn't in the catalog. Creates a
+        UniversityRequest row with `status='pending'`. Unlike
+        departments, universities require admin approval — the review
+        submission cannot proceed until an admin resolves the request.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nameEn, type]
+              properties:
+                nameEn:
+                  type: string
+                  minLength: 2
+                  maxLength: 200
+                nameBn:
+                  type: string
+                  maxLength: 200
+                type:
+                  type: string
+                  enum: [public, private, international]
+      responses:
+        '201':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      nameEn: { type: string }
+                      type: { type: string }
+                      status: { type: string, enum: [pending] }
+                      createdAt: { type: string, format: date-time }
+        '401':
+          description: Not authenticated
+        '409':
+          description: |
+            ALREADY_EXISTS (university with this name is already in the
+            catalog — payload includes the existing slug) or
+            DUPLICATE_REQUEST (this user already has a pending request
+            for the same normalised name — payload includes request_id).
+        '429':
+          description: TOO_MANY_PENDING — user has ≥ 5 pending requests
+
   /departments/search:
     get:
       tags: [Universities]
@@ -1137,6 +1238,84 @@ paths:
       responses:
         '201':
           description: University created
+
+  /admin/university-requests/{id}/resolve:
+    post:
+      tags: [Admin]
+      summary: Approve or reject a reviewer-submitted university request
+      description: |
+        Approving inserts the University row and flips the request to
+        `approved` inside one transaction. The admin can override
+        short_name / slug / location_city before publishing — if omitted
+        the server derives them from the request's nameEn.
+
+        Rejecting flips the request to `rejected` with an optional
+        admin_note. No side effects on other tables.
+
+        Requests already in a terminal status return 409.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [approve, reject]
+                admin_note:
+                  type: string
+                  maxLength: 500
+                short_name:
+                  type: string
+                  maxLength: 20
+                  description: Only used on approve
+                slug:
+                  type: string
+                  maxLength: 50
+                  description: Only used on approve
+                location_city:
+                  type: string
+                  maxLength: 100
+                  description: Only used on approve
+      responses:
+        '200':
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      status: { type: string }
+                      resolvedAt: { type: string, format: date-time }
+                  university:
+                    type: object
+                    nullable: true
+                    description: Only present on approve.
+                    properties:
+                      id: { type: integer }
+                      slug: { type: string }
+                      shortName: { type: string }
+        '400': { description: Validation failed }
+        '401': { description: Admin authentication required }
+        '404': { description: Request not found }
+        '409':
+          description: |
+            Request already resolved, or UNIQUE_VIOLATION on
+            short_name/slug when the admin's chosen values clash with an
+            existing university.
 
   /admin/departments/merge:
     post:
