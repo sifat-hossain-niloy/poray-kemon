@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Reviewer-requested universities — typeahead + admin approval queue
-**Last updated:** July 2026 (Session 13)
-**Active branches:** `feat/university-requests` (PR open, stacked on `feat/course-autocomplete`)
+**Phase:** Production deployment prep — Vercel + Neon + Upstash
+**Last updated:** July 2026 (Session 14)
+**Active branches:** `feat/vercel-deployment-prep` (PR open, stacked on `feat/university-requests`)
 
 ---
 
@@ -195,6 +195,16 @@
 - [x] `POST /api/admin/university-requests/[id]/resolve` — transactional. Approve creates the University row and flips the request status in one tx; reject just flips status with an optional note. Unique-constraint clashes → 409 with a targeted error so admins can retry with a different short_name/slug.
 - [x] SRS updated: version bumped to 1.5, new v1.5 changelog entry, FR-DIR-07 + FR-DIR-08 requirements added, FR-DIR-06 (merge tool) renumbered back to sit adjacent to FR-DIR-05, `university_requests` table added to §6, `/api/universities/search` + `/api/university-requests` + admin resolve endpoints added to §8, admin route added to §7.
 - [x] `pnpm typecheck` + `pnpm lint` clean; endpoints smoke-tested; browser preview of `/review/new` renders without console errors.
+
+### Session 14 — Vercel + Neon + Upstash deployment prep (`feat/vercel-deployment-prep`)
+
+- [x] `prisma/schema.prisma` — added `directUrl = env("DIRECT_URL")` so Neon's pooler works with migrations. Falls back to `url` when `DIRECT_URL` is unset (local dev, integration tests unaffected).
+- [x] `lib/redis.ts` — `redis` is now `Redis | null`. When `REDIS_URL` is unset, the client isn't instantiated at all; `getCache`/`setCache`/`deleteCache` short-circuit safely; new `acquireOnce(key, ttl)` helper returns `true` (assume first) when Redis is absent so the SQL unique constraints remain the source-of-truth. `/api/reports/route.ts` refactored to use `acquireOnce` + guard the rollback `redis.del`.
+- [x] `.env.example` refreshed with Vercel/Neon/Upstash-shaped variables + comments; local dev URLs preserved as the default.
+- [x] `vercel.json` created — pins `buildCommand: pnpm vercel-build`, `installCommand: pnpm install --frozen-lockfile`, `framework: nextjs`, `regions: [bom1]` (Mumbai edge, same as betonkemon.com).
+- [x] `package.json` — added `postinstall: prisma generate` + `vercel-build: prisma migrate deploy && next build`. Migrations now run as part of every Vercel deploy; failed migrations abort the build so production stays on the previous version.
+- [x] `docs/deployment/vercel-neon.md` — complete walkthrough (Neon signup → Upstash signup → Google OAuth production credentials → Vercel import → env vars → first-time seed → domain → uptime monitor). Also documents when to worry about tier limits and how to fall back to the VPS path.
+- [x] SRS §9 Tech Stack updated with the new hosting rows + v1.6 changelog entry. Version header bumped to 1.6.
 
 ---
 
