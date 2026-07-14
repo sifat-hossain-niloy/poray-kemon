@@ -24,10 +24,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 
-// Admin auth is enforced by middleware.ts on every /api/admin/* path.
+// Middleware guarantees an authenticated staff session; requireAdmin below
+// then narrows to admin+super_admin (merging repoints FKs — moderators
+// don't get to do this).
 
 const mergeBodySchema = z.object({
   target_id: z.number().int().positive(),
@@ -35,6 +38,8 @@ const mergeBodySchema = z.object({
 })
 
 export async function POST(req: Request) {
+  const guard = await requireAdmin()
+  if (guard.error) return guard.error
   let raw: unknown
   try {
     raw = await req.json()

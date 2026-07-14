@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { ADMIN_COOKIE_NAME, verifyAdminSessionToken } from '@/lib/admin-auth'
 
-// Routes that must be admin-authenticated.
-// /admin/login and /api/admin/login are explicitly allowed through.
+// Routes that must be staff-authenticated (admin OR moderator — role checks
+// happen inside the individual handlers via require* helpers in
+// lib/admin-auth.ts). The two login pages and the login endpoint are
+// explicitly allowed through unauthenticated.
 function isProtectedAdminPath(pathname: string): boolean {
   if (pathname === '/admin/login') return false
+  if (pathname === '/moderator/login') return false
   if (pathname === '/api/admin/login') return false
   return pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
 }
@@ -30,5 +33,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*'],
+  matcher: ['/admin/:path*', '/moderator/:path*', '/api/admin/:path*'],
 }

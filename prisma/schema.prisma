@@ -6,10 +6,12 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
   // Neon (and other poolers like Supavisor / PgBouncer) require migrations
-  // to talk to the primary directly. Runtime queries use the pooled url; the
-  // Prisma CLI (migrate deploy, migrate dev) uses directUrl. If DIRECT_URL
-  // isn't set (e.g. self-hosted Postgres, integration tests), Prisma falls
-  // back to url — so this line is safe to include in every environment.
+  // to talk to the primary directly. Runtime queries use the pooled `url`;
+  // the Prisma CLI (migrate deploy, migrate dev) uses `directUrl`.
+  //
+  // DIRECT_URL is required whenever this line is present. Local dev sets it
+  // to the same value as DATABASE_URL (see .env.example). Integration tests
+  // set it via test/global-setup.integration.ts.
   directUrl = env("DIRECT_URL")
 }
 
@@ -74,6 +76,18 @@ enum UniversityRequestStatus {
   pending
   approved
   rejected
+}
+
+enum AdminRole {
+  // Exactly one row may have this — enforced by a partial unique index in
+  // the migration. Only a super_admin can create/delete other admins.
+  super_admin
+  // Admins can moderate content AND reshape the catalog (create/edit
+  // universities, merge departments, add moderators).
+  admin
+  // Moderators can only work the moderation queues (reviews, reports,
+  // university requests) and mark unverified departments as verified.
+  moderator
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -297,9 +311,19 @@ model UniversityRequest {
 model AdminUser {
   id           Int       @id @default(autoincrement())
   username     String    @unique @db.VarChar(100)
+  // Optional secondary login identifier. Login accepts either username OR
+  // email — see /api/admin/login. Unique when set (enforced by the schema's
+  // @unique constraint; NULLs are considered distinct by Postgres).
+  email        String?   @unique @db.VarChar(255)
   passwordHash String    @map("password_hash") @db.VarChar(255)
+  role         AdminRole @default(moderator)
+  createdBy    Int?      @map("created_by")
   createdAt    DateTime  @default(now()) @map("created_at")
   lastLogin    DateTime? @map("last_login")
+
+  // The partial unique index that enforces "at most one super_admin" is
+  // declared as raw SQL in the migration — Prisma doesn't yet model partial
+  // indexes on enum equality. See migration.sql for the actual constraint.
 
   @@map("admin_users")
 }

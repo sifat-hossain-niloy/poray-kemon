@@ -6,7 +6,7 @@
 
 ---
 
-**Version:** 1.6  
+**Version:** 1.7  
 **Status:** Draft  
 **Last Updated:** July 2026  
 **Changelog:**
@@ -15,6 +15,7 @@
 - v1.2 — Helpful/upvote system added (login required to vote). Lightweight Google OAuth added for voters only. Soft moderation (Approach 2) confirmed.
 - v1.3 — **Core philosophy change:** Login (Google OAuth) required to submit reviews AND vote. Reading remains fully public. Anonymity preserved by never storing `user_id` on the `reviews` record — a separate `review_submissions` table tracks who reviewed which professor+course without exposing review content. IP rate limiting replaced by one-review-per-professor-course-per-account enforcement.
 - v1.4 — **Catalog scope-up + crowdsourced extensions.** University seed grew from 20 to **161 Wikipedia-sourced entries** (every BD university with canonical acronym + Bangla name + city). Departments are no longer admin-only — the review form now lets students add a new department inline via a two-field micro-form (Acronym + Full name); rows land as `status='unverified'` and surface in a new admin **merge-departments** tool. Course code and course name fields became a twin autocomplete that prepopulates both fields from one pick. Professor selection became a scoped typeahead. The static `<select>` dropdowns for university/department are gone.
+- v1.7 — **Staff roles + separate staff login pages.** `admin_users` gains a `role` column (`super_admin | admin | moderator`) plus optional `email`. A partial unique index at the DB level enforces "exactly one super_admin" (FR-MOD-06). Two visually distinct login pages (`/admin/login` and `/moderator/login`) share one endpoint — login accepts email OR username. Admin-only endpoints (uni/dept CRUD, department merge) are gated by `requireAdmin`; a new `/admin/users` page (FR-MOD-08) lets super-admins/admins create and remove staff.
 - v1.6 — **Deployment path locked in.** Production stack is Vercel Hobby (Mumbai edge) + Neon Postgres (ap-south-1) + Upstash Redis (ap-south-1) — all free-tier. Prisma schema now carries `directUrl` so Neon's pooler works with migrations. Redis client made optional (falls back to no-cache when `REDIS_URL` is unset). `docker-compose.prod.yml` and the VPS runbook stay in the repo as an escape hatch.
 - v1.5 — **Reviewer-requested universities.** The uni field is now a scoped typeahead, and reviewers whose university isn't in the catalog can file a request ticket (name + Bangla name + type) via a new `UniversityRequest` table. Unlike departments, universities require admin approval before they appear in the directory. New `/admin/university-requests` queue with approve (creates the row, admin polishes short_name/slug/city first) and reject (with note) actions.
 
@@ -381,7 +382,43 @@ overall_score = (teaching_quality × 0.5) + (grading_fairness × 0.3) + ((6 - at
 - Add/edit universities and departments
 - View all submitted reports with review content
 
-**FR-MOD-05:** Admin login shall be protected by a strong password. No social login. Admin panel accessible at `/admin` with session-based auth.
+**FR-MOD-05:** Staff (admin/moderator) login shall be protected by a username-or-email + strong password. **No social login for staff** — the admin panel intentionally does not share Google OAuth with regular users. Sessions are signed with HMAC-SHA256 (Web Crypto) and expire after 8 hours; the cookie carries `adminId` and `role`.
+
+**FR-MOD-06 — Staff roles:** Three tiers, enforced both in the session cookie and by handler-level `require*` helpers in `lib/admin-auth.ts`:
+
+| Role          | Count      | Powers                                                                                                                   |
+| ------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `super_admin` | Exactly 1  | Everything, including creating/deleting other `admin` and `moderator` users. Cannot be deleted.                          |
+| `admin`       | Any number | Everything except managing `admin`/`super_admin` users. Can create/delete `moderator` accounts. Can reshape the catalog. |
+| `moderator`   | Any number | Moderation queues only — reports, review moderation, university-request resolve, marking a department verified.          |
+
+The "exactly one super_admin" invariant is enforced by a **partial unique index** on `admin_users(role) WHERE role = 'super_admin'`. Attempting to INSERT/UPDATE a second super_admin fails at the DB level. The migration seeds the bootstrap admin (`username='admin'`) as the initial super_admin.
+
+**Permission matrix:**
+
+| Action                                     | super_admin | admin | moderator |
+| ------------------------------------------ | ----------- | ----- | --------- |
+| Resolve reports / moderate reviews         | ✓           | ✓     | ✓         |
+| Approve / reject university requests       | ✓           | ✓     | ✓         |
+| Mark department verified                   | ✓           | ✓     | ✓         |
+| Merge departments (destructive FK repoint) | ✓           | ✓     | ✗         |
+| Create / edit universities                 | ✓           | ✓     | ✗         |
+| Create / edit / delete departments         | ✓           | ✓     | ✗         |
+| Add / remove moderators                    | ✓           | ✓     | ✗         |
+| Add / remove admins                        | ✓           | ✗     | ✗         |
+| Delete self / super_admin                  | ✗           | ✗     | ✗         |
+
+**FR-MOD-07 — Separate login pages:** Two visually distinct login pages, one shared endpoint:
+
+- `/admin/login` — copy tailored for admins/super-admins.
+- `/moderator/login` — copy tailored for moderators.
+
+Both POST to `/api/admin/login` and accept **either** username OR email as the identifier (the server sniffs which by looking for `@`). Both pages accept any staff role — a moderator logging in via `/admin/login` is not rejected, they just land on `/admin` with moderator-scoped features. Cross-linking between the two pages is provided in each page's footer.
+
+**FR-MOD-08 — Staff user management:** Super-admins and admins can manage staff via `/admin/users`. Server-side gate: page redirects to `/admin` for moderators. Behaviours:
+
+- **Create** via `POST /api/admin/users` — validates username (letters/digits/`._-`, 3–100 chars), optional email, password (8–72 chars bcrypt-hashed at cost 12), and role (`admin` | `moderator`). Admins can only create moderators; the role enum in the schema does not accept `super_admin` so accidental promotion is impossible.
+- **Delete** via `DELETE /api/admin/users/[id]` — rejects self-delete (`SELF_DELETE_FORBIDDEN`), super_admin deletion (`SUPER_ADMIN_IMMUTABLE`), and non-super admins trying to remove other admins (`FORBIDDEN`).
 
 ---
 
@@ -778,10 +815,21 @@ resolved_at     TIMESTAMP
 ```sql
 id              SERIAL PRIMARY KEY
 username        VARCHAR(100) UNIQUE NOT NULL
-password_hash   VARCHAR(255) NOT NULL              -- bcrypt
+email           VARCHAR(255) UNIQUE                     -- Optional secondary login identifier
+password_hash   VARCHAR(255) NOT NULL                   -- bcrypt cost 12
+role            admin_role NOT NULL DEFAULT 'moderator' -- ENUM super_admin | admin | moderator
+created_by      INTEGER                                 -- admin_users.id — audit trail; null for the bootstrap super_admin
 created_at      TIMESTAMP DEFAULT NOW()
 last_login      TIMESTAMP
+
+-- Partial unique index — the DB itself enforces "at most one super_admin".
+-- Set by migration 20260715_add_admin_roles_and_email.
+CREATE UNIQUE INDEX admin_users_only_one_super_admin
+  ON admin_users ((role))
+  WHERE role = 'super_admin';
 ```
+
+Introduced by migration `20260715_add_admin_roles_and_email` which adds `role`, `email`, `created_by`, the partial unique index, and promotes the seed-created bootstrap admin (`username='admin'`) to `super_admin`.
 
 #### `review_submissions`
 
@@ -900,6 +948,9 @@ INDEX(professor_course_id, submitted_at DESC)
 | `/admin/universities`        | University list                                                                                     |
 | `/admin/universities/[id]`   | University detail — edit fields, add/edit/merge departments (FR-DIR-06)                             |
 | `/admin/university-requests` | Reviewer-submitted uni request queue — approve (creates the row) or reject (with note). (FR-DIR-08) |
+| `/admin/users`               | Staff user management — create/remove admins & moderators. Super-admin + admin only. (FR-MOD-08)    |
+| `/admin/login`               | Admin sign-in page (username-or-email + password).                                                  |
+| `/moderator/login`           | Moderator sign-in page — same endpoint as admin login, different copy.                              |
 | `/admin/reviews/[id]`        | Single review detail + delete/hide action                                                           |
 
 ---
@@ -1061,6 +1112,27 @@ POST   /api/admin/university-requests/:id/resolve
                                            On approve: creates University in a single tx
                                            and flips request to 'approved'. On reject:
                                            flips to 'rejected' with the admin_note. (FR-DIR-08)
+POST   /api/admin/users                    Body: { username, email?, password, role: 'admin'|'moderator' }
+                                           Rules: admin creates moderators only;
+                                           super_admin creates both. role='super_admin'
+                                           is not accepted at the schema layer.
+                                           Auth: requireAdmin. (FR-MOD-08)
+DELETE /api/admin/users/:id                Rules: never delete self, never delete
+                                           super_admin, admin can only delete moderators.
+                                           Auth: requireAdmin. (FR-MOD-08)
+```
+
+**Login endpoint** — the shared entry point for both `/admin/login` and `/moderator/login` pages:
+
+```
+POST /api/admin/login
+     Body: { login, password, from? }
+     - `login` accepts either username OR email; server sniffs based on '@'
+     - `from` is honoured only if it starts with /admin or /moderator
+     - Sets an HMAC-SHA256 signed cookie carrying { adminId, role, exp }
+     - On success: 303 redirect to `from` or `/admin`
+     - On failure: 303 redirect to the referring login page with ?error=1
+     Runtime: nodejs (bcryptjs)
 ```
 
 ---

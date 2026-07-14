@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 import { departmentUpdateSchema } from '@/lib/validations/admin'
 
 export const dynamic = 'force-dynamic'
@@ -13,6 +14,8 @@ interface RouteCtx {
 }
 
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  const guard = await requireAdmin()
+  if (guard.error) return guard.error
   const { id: idRaw } = await ctx.params
   const id = Number(idRaw)
   if (!Number.isInteger(id) || id <= 0) {

@@ -62,9 +62,29 @@ export const universityRequestResolveSchema = z.object({
   location_city: z.string().trim().max(100).optional().or(z.literal('')),
 })
 
+// Staff (admin_users) — role-restricted creation.
+// Note that role='super_admin' is intentionally NOT accepted here — the DB
+// partial unique index enforces "at most one" and the migration seeded the
+// initial super_admin. Adding another via POST is impossible by design.
+export const adminUserCreateSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3)
+    .max(100)
+    .regex(/^[A-Za-z0-9_.-]+$/, 'Letters, digits, dot, underscore, hyphen only'),
+  email: z.string().trim().email().max(255).optional().or(z.literal('')),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(72, 'Password is too long (bcrypt cap)'),
+  role: z.enum(['admin', 'moderator']),
+})
+
 export type UniversityCreateInput = z.infer<typeof universityCreateSchema>
 export type UniversityUpdateInput = z.infer<typeof universityUpdateSchema>
 export type DepartmentCreateInput = z.infer<typeof departmentCreateSchema>
 export type DepartmentUpdateInput = z.infer<typeof departmentUpdateSchema>
 export type UniversityRequestCreateInput = z.infer<typeof universityRequestCreateSchema>
 export type UniversityRequestResolveInput = z.infer<typeof universityRequestResolveSchema>
+export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>

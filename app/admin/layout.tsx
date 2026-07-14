@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { STRINGS } from '@/lib/strings'
-import { getAdminSession } from '@/lib/admin-auth'
+import { getAdminSession, canAdmin, canSuperAdmin } from '@/lib/admin-auth'
+import { Badge } from '@/components/ui/badge'
 
 // Admin is internal tooling — keep it out of search engines entirely.
 export const metadata: Metadata = {
@@ -45,12 +46,40 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 {STRINGS.admin.reports}
               </Link>
               <Link
-                href="/admin/universities"
+                href="/admin/university-requests"
                 className="text-muted-foreground transition-colors hover:text-foreground"
               >
-                Universities
+                Uni requests
               </Link>
+              {canAdmin(session.role) ? (
+                <Link
+                  href="/admin/universities"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Universities
+                </Link>
+              ) : null}
+              {canSuperAdmin(session.role) ? (
+                <Link
+                  href="/admin/users"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Users
+                </Link>
+              ) : null}
             </nav>
+            <Badge
+              variant={
+                session.role === 'super_admin'
+                  ? 'default'
+                  : session.role === 'admin'
+                    ? 'secondary'
+                    : 'outline'
+              }
+              className="text-[10px] uppercase tracking-wide"
+            >
+              {session.role.replace('_', ' ')}
+            </Badge>
             <form action="/api/admin/logout" method="POST">
               <button
                 type="submit"

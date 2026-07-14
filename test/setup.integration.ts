@@ -67,6 +67,16 @@ vi.mock('@/lib/redis', async () => {
     deleteCache: vi.fn(async (key: string) => {
       __redisStore.delete(key)
     }),
+    // Mirrors the real acquireOnce in lib/redis.ts — atomic set-if-absent
+    // with TTL. Returns true iff we won the lock.
+    acquireOnce: vi.fn(async (key: string, ttlSeconds: number): Promise<boolean> => {
+      const existing = __redisStore.get(key)
+      if (existing && (existing.expiresAt === null || Date.now() <= existing.expiresAt)) {
+        return false
+      }
+      __redisStore.set(key, { value: '1', expiresAt: Date.now() + ttlSeconds * 1000 })
+      return true
+    }),
     CACHE_KEYS,
     CACHE_TTL,
   }

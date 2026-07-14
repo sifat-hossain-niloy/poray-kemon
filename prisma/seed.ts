@@ -1546,13 +1546,16 @@ async function main() {
   const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? 'changeme123'
   const passwordHash = await bcrypt.hash(adminPassword, 12)
 
+  // The bootstrap admin — always the single super_admin row. On existing
+  // DBs the migration promoted them; on a fresh DB the `create` branch fires
+  // and this ensures the initial account has the right role from the start.
   await db.adminUser.upsert({
     where: { username: 'admin' },
-    create: { username: 'admin', passwordHash },
-    update: {},
+    create: { username: 'admin', passwordHash, role: 'super_admin' },
+    update: { role: 'super_admin' },
   })
 
-  console.log('  ✓ Admin user created (username: admin)')
+  console.log('  ✓ Super-admin created (username: admin)')
 
   const totalUniversities = await db.university.count()
   const totalDepartments = await db.department.count()

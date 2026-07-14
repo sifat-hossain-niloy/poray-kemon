@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Production deployment prep — Vercel + Neon + Upstash
-**Last updated:** July 2026 (Session 14)
-**Active branches:** `feat/vercel-deployment-prep` (PR open, stacked on `feat/university-requests`)
+**Phase:** Staff roles + separate admin/moderator login
+**Last updated:** July 2026 (Session 15)
+**Active branches:** `feat/admin-moderator-roles` (PR open, stacked on `feat/vercel-deployment-prep`)
 
 ---
 
@@ -205,6 +205,22 @@
 - [x] `package.json` — added `postinstall: prisma generate` + `vercel-build: prisma migrate deploy && next build`. Migrations now run as part of every Vercel deploy; failed migrations abort the build so production stays on the previous version.
 - [x] `docs/deployment/vercel-neon.md` — complete walkthrough (Neon signup → Upstash signup → Google OAuth production credentials → Vercel import → env vars → first-time seed → domain → uptime monitor). Also documents when to worry about tier limits and how to fall back to the VPS path.
 - [x] SRS §9 Tech Stack updated with the new hosting rows + v1.6 changelog entry. Version header bumped to 1.6.
+
+### Session 15 — Staff roles + separate admin/moderator login (`feat/admin-moderator-roles`)
+
+- [x] **Schema**: `AdminRole` enum (`super_admin | admin | moderator`) + `email` (unique) + `created_by` on `admin_users`. Migration `20260715_add_admin_roles_and_email` also adds a partial unique index `admin_users_only_one_super_admin ON (role) WHERE role = 'super_admin'` — enforces "exactly one super-admin" at the DB level and promotes the seed bootstrap admin to super_admin.
+- [x] `prisma/seed.ts` — bootstrap admin now upserted with `role: 'super_admin'` so fresh-DB deploys land the initial super-admin correctly.
+- [x] **Auth core** (`lib/admin-auth.ts`): session cookie carries `{ adminId, role, exp }`; validation rejects unknown role literals so legacy tokens fail closed. Three helpers: `requireStaff`, `requireAdmin`, `requireSuperAdmin` — each returns `{ session }` or `{ error: NextResponse }`. Two boolean predicates (`canAdmin`, `canSuperAdmin`) for UI gating.
+- [x] **Two login pages**: `/admin/login` and `/moderator/login` — shared `StaffLoginForm` component (variant='admin' | 'moderator') with tailored copy + cross-link. Both POST to `/api/admin/login`. Login accepts `login` (username OR email) — server sniffs for `@`.
+- [x] **Middleware**: `/moderator/login` explicitly allowed through; matcher extended to `/moderator/:path*`.
+- [x] **Admin-only route gates**: `requireAdmin` added to `PATCH /api/admin/departments/[id]`, `POST /api/admin/departments/merge`, `POST /api/admin/universities`, `PATCH /api/admin/universities/[id]`, `POST /api/admin/universities/[id]/departments`. Page-level `redirect('/admin')` on `/admin/universities/*` for moderators.
+- [x] **Admin layout**: role badge in header; nav entries `Universities` and `Users` conditionally shown.
+- [x] **`/admin/users`** — table of staff with role/email/creation/last-login. Super-admin can create/delete admins + moderators; admin can only touch moderators. Delete affordance hidden for self / super_admin / cross-tier.
+- [x] **`POST /api/admin/users`** — bcrypt cost 12; validation enforces username pattern, optional email, password 8–72; schema rejects `role='super_admin'`.
+- [x] **`DELETE /api/admin/users/[id]`** — rejects self-delete, super_admin deletion, admin-deleting-admin.
+- [x] **Tests**: admin-auth suite updated for the new signature + a new test for role-literal rejection. Reports integration mock gained `acquireOnce`. All 66 unit + 25 integration tests pass. Typecheck + lint clean.
+- [x] **Docs**: SRS §4.5 gains **FR-MOD-06/07/08**; §6 `admin_users` redoc'd with the new columns and partial index; §7 route map adds login + `/admin/users`; §8 API spec adds the users endpoints + login body shape. Version bumped to 1.7. Build-log rows added.
+- [x] Local `DIRECT_URL` added to `.env.local`; `test/global-setup.integration.ts` sets `DIRECT_URL` for the integration DB; `.env.example` updated to note it's now required.
 
 ---
 
