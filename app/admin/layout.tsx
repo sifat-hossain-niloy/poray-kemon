@@ -67,6 +67,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   Users
                 </Link>
               ) : null}
+              <Link
+                href="/admin/settings"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Account
+              </Link>
             </nav>
             <Badge
               variant={
