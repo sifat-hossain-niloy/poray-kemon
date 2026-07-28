@@ -62,9 +62,51 @@ export const universityRequestResolveSchema = z.object({
   location_city: z.string().trim().max(100).optional().or(z.literal('')),
 })
 
+// Staff (admin_users) — role-restricted creation.
+// Note that role='super_admin' is intentionally NOT accepted here — the DB
+// partial unique index enforces "at most one" and the migration seeded the
+// initial super_admin. Adding another via POST is impossible by design.
+export const adminUserCreateSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3)
+    .max(100)
+    .regex(/^[A-Za-z0-9_.-]+$/, 'Letters, digits, dot, underscore, hyphen only'),
+  email: z.string().trim().email().max(255).optional().or(z.literal('')),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(72, 'Password is too long (bcrypt cap)'),
+  role: z.enum(['admin', 'moderator']),
+})
+
+// Self-service password change. Any authenticated staff row (super_admin,
+// admin, moderator) can update their own password by proving they know the
+// current one. Not gated by role.
+export const adminPasswordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password required'),
+    newPassword: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .max(72, 'Password is too long (bcrypt cap)'),
+    confirmNewPassword: z.string(),
+  })
+  .refine((d) => d.newPassword === d.confirmNewPassword, {
+    message: 'Confirmation does not match the new password',
+    path: ['confirmNewPassword'],
+  })
+  .refine((d) => d.newPassword !== d.currentPassword, {
+    message: 'New password must differ from the current one',
+    path: ['newPassword'],
+  })
+
 export type UniversityCreateInput = z.infer<typeof universityCreateSchema>
 export type UniversityUpdateInput = z.infer<typeof universityUpdateSchema>
 export type DepartmentCreateInput = z.infer<typeof departmentCreateSchema>
 export type DepartmentUpdateInput = z.infer<typeof departmentUpdateSchema>
 export type UniversityRequestCreateInput = z.infer<typeof universityRequestCreateSchema>
 export type UniversityRequestResolveInput = z.infer<typeof universityRequestResolveSchema>
+export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>
+export type AdminPasswordChangeInput = z.infer<typeof adminPasswordChangeSchema>

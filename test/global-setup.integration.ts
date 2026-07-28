@@ -52,11 +52,15 @@ export default async function setup() {
     )
   }
   process.env.DATABASE_URL = testUrl
+  // Prisma requires DIRECT_URL when the schema declares it (see
+  // prisma/schema.prisma). Locally there's no pooler, so DIRECT_URL and
+  // DATABASE_URL are the same connection string.
+  process.env.DIRECT_URL = testUrl
 
   // 3. Apply migrations (idempotent — `prisma migrate deploy` only runs pending ones)
   try {
     execSync('pnpm prisma migrate deploy', {
-      env: { ...process.env, DATABASE_URL: testUrl },
+      env: { ...process.env, DATABASE_URL: testUrl, DIRECT_URL: testUrl },
       stdio: 'inherit',
     })
   } catch (err) {

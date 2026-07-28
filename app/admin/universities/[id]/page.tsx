@@ -1,8 +1,9 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { db } from '@/lib/db'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { canAdmin, getAdminSession } from '@/lib/admin-auth'
 import { EditUniversityForm } from './EditUniversityForm'
 import { DepartmentList } from './DepartmentList'
 
@@ -11,6 +12,9 @@ interface PageProps {
 }
 
 export default async function AdminUniversityDetailPage({ params }: PageProps) {
+  const session = await getAdminSession()
+  if (!session || !canAdmin(session.role)) redirect('/admin')
+
   const { id: idRaw } = await params
   const id = Number(idRaw)
   if (!Number.isInteger(id) || id <= 0) notFound()

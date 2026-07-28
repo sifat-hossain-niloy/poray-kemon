@@ -1,11 +1,18 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { db } from '@/lib/db'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { canAdmin, getAdminSession } from '@/lib/admin-auth'
 import { CreateUniversityForm } from './CreateUniversityForm'
 
 export default async function AdminUniversitiesPage() {
+  // Middleware guaranteed a session; here we narrow to admin+super_admin.
+  // Moderators land on the dashboard instead — the nav already hides this
+  // link for them, but direct-URL visits need a server-side gate too.
+  const session = await getAdminSession()
+  if (!session || !canAdmin(session.role)) redirect('/admin')
   const universities = await db.university.findMany({
     orderBy: [{ type: 'asc' }, { shortName: 'asc' }],
     include: {

@@ -7,13 +7,13 @@ beforeAll(() => {
 
 describe('admin session signing (HMAC-SHA256 over Web Crypto)', () => {
   it('round-trips an adminId through encode/verify', async () => {
-    const token = await createAdminSessionToken(42)
+    const token = await createAdminSessionToken(42, 'super_admin')
     const session = await verifyAdminSessionToken(token)
-    expect(session).toEqual({ adminId: 42 })
+    expect(session).toEqual({ adminId: 42, role: 'super_admin' })
   })
 
   it('rejects a tampered payload', async () => {
-    const token = await createAdminSessionToken(1)
+    const token = await createAdminSessionToken(1, 'admin')
     // Flip the first character of the payload portion
     const [payload, sig] = token.split('.')
     const tampered = (payload!.charAt(0) === 'a' ? 'b' : 'a') + payload!.slice(1) + '.' + sig
@@ -21,7 +21,7 @@ describe('admin session signing (HMAC-SHA256 over Web Crypto)', () => {
   })
 
   it('rejects a tampered signature', async () => {
-    const token = await createAdminSessionToken(1)
+    const token = await createAdminSessionToken(1, 'admin')
     const [payload, sig] = token.split('.')
     const tampered = `${payload}.${sig!.slice(0, -2)}aa`
     expect(await verifyAdminSessionToken(tampered)).toBeNull()
@@ -36,7 +36,7 @@ describe('admin session signing (HMAC-SHA256 over Web Crypto)', () => {
   })
 
   it('rejects a token signed with a different secret', async () => {
-    const token = await createAdminSessionToken(99)
+    const token = await createAdminSessionToken(99, 'moderator')
     // Change the secret after token issuance
     const previous = process.env.ADMIN_SESSION_SECRET
     process.env.ADMIN_SESSION_SECRET = 'a-completely-different-secret-of-good-length'
@@ -49,7 +49,7 @@ describe('admin session signing (HMAC-SHA256 over Web Crypto)', () => {
 
   it('rejects an expired token', async () => {
     // Make a token, then move time forward beyond TTL
-    const token = await createAdminSessionToken(7)
+    const token = await createAdminSessionToken(7, 'admin')
     const [payload, sig] = token.split('.')
     // Decode, mutate exp into the past, re-sign with same secret via createAdminSessionToken? No — easier:
     // Build a deliberately-expired token by reaching past the signer. Simpler:
@@ -61,7 +61,20 @@ describe('admin session signing (HMAC-SHA256 over Web Crypto)', () => {
     // Use the real signing helper indirectly by checking the time gate handles
     // a manually-built JSON. To keep the test independent, just trust the gate
     // by feeding a non-numeric exp.
-    const bogus = btoa(JSON.stringify({ adminId: 7, exp: 'soon' }))
+    const bogus = btoa(JSON.stringify({ adminId: 7, role: 'admin', exp: 'soon' }))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+    expect(await verifyAdminSessionToken(`${bogus}.${sig}`)).toBeNull()
+  })
+
+  it('rejects a token with an unknown role', async () => {
+    // Legacy tokens (issued before the role field existed) or hand-crafted
+    // payloads with an invalid role literal must be rejected outright — the
+    // gate helpers assume role is a known literal.
+    const token = await createAdminSessionToken(5, 'admin')
+    const [, sig] = token.split('.')
+    const bogus = btoa(JSON.stringify({ adminId: 5, role: 'root', exp: Date.now() / 1000 + 60 }))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '')

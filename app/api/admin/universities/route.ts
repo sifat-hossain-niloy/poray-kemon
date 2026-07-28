@@ -4,11 +4,14 @@
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 import { universityCreateSchema } from '@/lib/validations/admin'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
+  const guard = await requireAdmin()
+  if (guard.error) return guard.error
   const parsed = universityCreateSchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json(
