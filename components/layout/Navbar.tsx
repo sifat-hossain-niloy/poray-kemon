@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -58,9 +59,13 @@ export function Navbar() {
                 }
               />
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>
-                  {strings.auth.signedInAs(session.user.name ?? '')}
-                </DropdownMenuLabel>
+                {/* Base UI's Menu.GroupLabel (wrapped by DropdownMenuLabel)
+                    reads its GroupContext, so it MUST live inside a Group. */}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>
+                    {strings.auth.signedInAs(session.user.name ?? '')}
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem render={<Link href="/review/new" />}>
                   {strings.nav.writeReview}
