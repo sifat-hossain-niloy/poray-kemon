@@ -36,8 +36,8 @@ export default async function HomePage() {
     locale === 'en' ? `Browse ${strings.nav.universities}` : `${strings.nav.universities} দেখুন`
   const footerTagline =
     locale === 'en'
-      ? `${strings.site.name} · For Bangladesh's students, by Bangladesh's students`
-      : `${strings.site.name} · বাংলাদেশের শিক্ষার্থীদের জন্য, শিক্ষার্থীদের তৈরি`
+      ? `${strings.site.name} · For Bangladesh's students, by Bangladesh's student`
+      : `${strings.site.name} · বাংলাদেশের শিক্ষার্থীদের জন্য, শিক্ষার্থীর তৈরি`
   const footerAnonymity = locale === 'en' ? 'Fully anonymous' : 'সম্পূর্ণ বেনামী'
 
   return (
