@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ReviewCard } from '@/components/review/ReviewCard'
+import { obfuscateName } from '@/lib/name-obfuscation'
 import { getLocale, getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +38,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   })
   if (!prof) return { title: 'Not found' }
   return {
-    title: `${prof.nameBn ?? prof.nameEn} — সব রিভিউ`,
+    title: `${prof.nameBn ?? obfuscateName(prof.nameEn)} — সব রিভিউ`,
     robots: { index: true },
   }
 }
@@ -140,7 +141,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
           </Link>
           <span className="text-muted-foreground">›</span>
           <Link href={profHref} className="text-muted-foreground hover:text-foreground">
-            {professor.nameBn ?? professor.nameEn}
+            {professor.nameBn ?? obfuscateName(professor.nameEn)}
           </Link>
         </div>
         <h1 className="text-2xl font-bold tracking-tight">
@@ -148,7 +149,8 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
           {professorCourse.course.courseName}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {strings.professor.reviewCount(totalReviews)} · {professor.nameBn ?? professor.nameEn}
+          {strings.professor.reviewCount(totalReviews)} ·{' '}
+          {professor.nameBn ?? obfuscateName(professor.nameEn)}
         </p>
       </div>
 

@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { db } from '@/lib/db'
+import { obfuscateName } from '@/lib/name-obfuscation'
 
 export type SearchResultKind = 'university' | 'department' | 'professor'
 
@@ -113,7 +114,10 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
     kind: r.kind,
     id: r.id,
     slug: r.slug,
-    title: r.title,
+    // Obfuscate the professor title in public search results. University +
+    // department titles pass through as-is — the substitution only applies
+    // to English professor names (see lib/name-obfuscation.ts).
+    title: r.kind === 'professor' ? obfuscateName(r.title) : r.title,
     subtitle: r.subtitle,
     score: r.score,
     href:
