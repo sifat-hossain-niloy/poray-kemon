@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ReviewCard } from '@/components/review/ReviewCard'
 import { combineProfessorStats } from '@/lib/professor-stats'
+import { obfuscateName } from '@/lib/name-obfuscation'
 import { getLocale, getStrings } from '@/lib/i18n'
 import Link from 'next/link'
 
@@ -26,9 +27,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     select: { nameEn: true, nameBn: true },
   })
   if (!prof) return { title: 'Not found' }
+  // Title + meta description are indexed by search engines — never leak the
+  // real English name here. Bangla name is fine (different attack surface).
+  const displayEn = obfuscateName(prof.nameEn)
   return {
-    title: prof.nameBn ?? prof.nameEn,
-    description: `${prof.nameEn} এর শিক্ষাগত রিভিউ ও রেটিং`,
+    title: prof.nameBn ?? displayEn,
+    description: `${displayEn} এর শিক্ষাগত রিভিউ ও রেটিং`,
   }
 }
 
@@ -112,10 +116,10 @@ export default async function ProfessorPage({ params }: PageProps) {
         </div>
 
         <h1 className="text-3xl font-bold tracking-tight">
-          {professor.nameBn ?? professor.nameEn}
+          {professor.nameBn ?? obfuscateName(professor.nameEn)}
         </h1>
         {professor.nameBn ? (
-          <p className="mt-1 text-sm text-muted-foreground">{professor.nameEn}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{obfuscateName(professor.nameEn)}</p>
         ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2">

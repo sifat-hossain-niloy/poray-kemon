@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useLocale } from '@/lib/i18n/client'
+import { obfuscateName } from '@/lib/name-obfuscation'
 
 export interface ProfessorSelection {
   id: number | null // null = create on submit
@@ -133,7 +134,10 @@ export function ProfessorTypeahead({
               {initial(selection.name_en)}
             </span>
             <div className="min-w-0">
-              <div className="truncate font-medium">{selection.name_en}</div>
+              {/* Display obfuscated — the raw name in `selection.name_en` is
+                  still sent to /api/reviews on submit; this only changes what
+                  the user sees. */}
+              <div className="truncate font-medium">{obfuscateName(selection.name_en)}</div>
               <div className="truncate text-xs text-muted-foreground">
                 {selection.id ? t.pickedExisting : t.pickedNew}
               </div>
@@ -212,7 +216,10 @@ export function ProfessorTypeahead({
                           {initial(h.name_en)}
                         </span>
                         <div className="min-w-0">
-                          <div className="truncate font-medium">{h.name_en}</div>
+                          {/* onSelect sends h.name_en verbatim (raw), so the
+                              API's find-or-create still matches the DB row.
+                              Only the visible text is obfuscated. */}
+                          <div className="truncate font-medium">{obfuscateName(h.name_en)}</div>
                           <div className="truncate text-xs text-muted-foreground">
                             {[h.designation, t.reviewCount(h.review_count)]
                               .filter(Boolean)
