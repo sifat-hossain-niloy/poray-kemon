@@ -40,6 +40,25 @@ export function Navbar() {
         {/* Language toggle */}
         <LanguageToggle />
 
+        {/* Write-a-review CTA — always visible. Signed-in users go straight
+            to /review/new; signed-out users bounce through Google and land
+            on /review/new after auth (callbackUrl). Kept as a primary Button
+            so it's the clearest action in the navbar. */}
+        {session?.user ? (
+          <Button size="sm" className="shrink-0" render={<Link href="/review/new" />}>
+            {strings.nav.writeReview}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            className="shrink-0"
+            disabled={status === 'loading'}
+            onClick={() => signIn('google', { callbackUrl: '/review/new' })}
+          >
+            {strings.nav.writeReview}
+          </Button>
+        )}
+
         {/* Auth */}
         <div className="flex items-center gap-2 shrink-0">
           {status === 'loading' ? (
@@ -67,17 +86,13 @@ export function Navbar() {
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem render={<Link href="/review/new" />}>
-                  {strings.nav.writeReview}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut()}>
                   {strings.auth.signOut}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button onClick={() => signIn('google')} size="sm">
+            <Button variant="outline" onClick={() => signIn('google')} size="sm">
               {strings.auth.signInWithGoogle}
             </Button>
           )}
