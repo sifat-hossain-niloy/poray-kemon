@@ -80,19 +80,25 @@ export default async function UniversityPage({ params }: PageProps) {
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {uni.departments.map((dept) => (
-              <Card key={dept.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <CardTitle className="text-base">{dept.shortName ?? dept.nameEn}</CardTitle>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {dept._count.professors.toLocaleString('bn-BD')} শিক্ষক
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  {dept.nameBn ?? dept.nameEn}
-                </CardContent>
-              </Card>
+              <Link
+                key={dept.id}
+                href={`/universities/${uni.slug}/departments/${dept.slug}`}
+                className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+              >
+                <Card className="h-full transition-colors group-hover:border-primary/50">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <CardTitle className="text-base">{dept.shortName ?? dept.nameEn}</CardTitle>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {dept._count.professors.toLocaleString('bn-BD')} শিক্ষক
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {dept.nameBn ?? dept.nameEn}
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
           </div>
         )}
