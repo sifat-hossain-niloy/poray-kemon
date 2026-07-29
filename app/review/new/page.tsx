@@ -26,8 +26,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title: strings.review.formTitle,
     description:
       locale === 'en'
-        ? 'Share your experience — fully anonymous'
-        : 'নিজের অভিজ্ঞতা শেয়ার করুন — সম্পূর্ণ বেনামী',
+        ? 'Share your experience, fully anonymous.'
+        : 'নিজের অভিজ্ঞতা শেয়ার করুন, সম্পূর্ণ বেনামী।',
     robots: { index: false },
   }
 }

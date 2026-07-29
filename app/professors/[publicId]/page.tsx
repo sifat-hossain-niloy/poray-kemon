@@ -175,7 +175,7 @@ export default async function ProfessorPage({ params }: PageProps) {
           <CardContent className="space-y-4">
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-bold tabular-nums">
-                {combined.overallScore?.toFixed(1) ?? '—'}
+                {combined.overallScore?.toFixed(1) ?? '-'}
               </span>
               <span className="text-sm text-muted-foreground">{outOfFive}</span>
               {combined.wouldRecommendPct !== null ? (
@@ -219,7 +219,7 @@ export default async function ProfessorPage({ params }: PageProps) {
                     <CardHeader className="pb-3">
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <CardTitle className="text-base">
-                          {pc.course.courseCode ? `${pc.course.courseCode} — ` : ''}
+                          {pc.course.courseCode ? `${pc.course.courseCode} · ` : ''}
                           {pc.course.courseName}
                         </CardTitle>
                         <span className="text-xs text-muted-foreground">
@@ -292,7 +292,7 @@ function Stat({
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-0.5 text-lg font-semibold tabular-nums">
-        {num !== null ? num.toFixed(1) : '—'}
+        {num !== null ? num.toFixed(1) : '-'}
       </div>
     </div>
   )

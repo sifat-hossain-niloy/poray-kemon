@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const prof = await resolveProfessor(publicId)
   if (!prof) return { title: 'Not found' }
   return {
-    title: `${prof.nameBn ?? obfuscateName(prof.nameEn)} — সব রিভিউ`,
+    title: `${prof.nameBn ?? obfuscateName(prof.nameEn)} · সব রিভিউ`,
     robots: { index: true },
   }
 }
@@ -162,7 +162,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
           </Link>
         </div>
         <h1 className="text-2xl font-bold tracking-tight">
-          {professorCourse.course.courseCode ? `${professorCourse.course.courseCode} — ` : ''}
+          {professorCourse.course.courseCode ? `${professorCourse.course.courseCode} · ` : ''}
           {professorCourse.course.courseName}
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -302,7 +302,7 @@ function Stat({
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-0.5 text-lg font-semibold tabular-nums">
-        {num !== null ? num.toFixed(1) : '—'}
+        {num !== null ? num.toFixed(1) : '-'}
       </div>
     </div>
   )
