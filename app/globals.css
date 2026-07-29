@@ -121,10 +121,33 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    /* Defence in depth: if any future element exceeds the viewport, clip it
+       rather than letting the document become horizontally scrollable, which
+       on touch devices reads as the whole page drifting sideways during a
+       vertical swipe. `clip` (not `hidden`) does not create a scroll
+       container, so the sticky navbar below still sticks to the viewport. */
+    overflow-x: clip;
+    /* Kills horizontal rubber-banding at the edges. */
+    overscroll-behavior-x: none;
+  }
+  body {
+    @apply bg-background text-foreground;
+    overflow-x: clip;
+  }
+}
+
+/* Deliberately unlayered so it outranks Tailwind's `text-sm` utility.
+   iOS Safari force-zooms the page whenever a focused form control has a
+   font-size below 16px, and the resulting zoom leaves the document wider
+   than the window — which is what makes the page feel shifted and pannable
+   after tapping the navbar search. Enforce the 16px floor on phones only;
+   the ≥sm design keeps its smaller type. */
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
