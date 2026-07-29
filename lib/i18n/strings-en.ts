@@ -155,6 +155,7 @@ export const EN: Strings = {
     universities: 'Universities',
     about: 'About',
     writeReview: 'Write a review',
+    writeReviewShort: 'Review',
     language: 'Language',
     languageBangla: 'বাংলা',
     languageEnglish: 'English',

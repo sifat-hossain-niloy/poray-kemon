@@ -152,6 +152,8 @@ export const BN = {
     universities: 'বিশ্ববিদ্যালয়',
     about: 'আমাদের সম্পর্কে',
     writeReview: 'রিভিউ লিখুন',
+    /** Narrow-viewport label for the navbar CTA. */
+    writeReviewShort: 'রিভিউ',
     language: 'ভাষা',
     languageBangla: 'বাংলা',
     languageEnglish: 'English',
