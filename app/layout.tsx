@@ -4,7 +4,6 @@ import { SessionProvider } from 'next-auth/react'
 import { Navbar } from '@/components/layout/Navbar'
 import { LocaleProvider } from '@/lib/i18n/client'
 import { getLocale, getStrings } from '@/lib/i18n'
-import { getAdminSession } from '@/lib/admin-auth'
 import './globals.css'
 import { cn } from '@/lib/utils'
 
@@ -67,8 +66,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const [locale, staff] = await Promise.all([getLocale(), getAdminSession()])
-  const staffRole = staff?.role ?? null
+  const locale = await getLocale()
 
   return (
     <html
@@ -78,7 +76,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
         <SessionProvider>
           <LocaleProvider locale={locale}>
-            <Navbar staffRole={staffRole} />
+            <Navbar />
             <div className="flex flex-1 flex-col">{children}</div>
           </LocaleProvider>
         </SessionProvider>
