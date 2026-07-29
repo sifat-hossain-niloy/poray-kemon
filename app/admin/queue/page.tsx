@@ -34,7 +34,7 @@ export default async function AdminQueuePage({ searchParams }: PageProps) {
     include: {
       professorCourse: {
         include: {
-          professor: { select: { nameEn: true, slug: true } },
+          professor: { select: { nameEn: true, publicId: true } },
           course: { select: { courseCode: true, courseName: true } },
         },
       },
@@ -76,7 +76,7 @@ export default async function AdminQueuePage({ searchParams }: PageProps) {
                     <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
-                          href={`/professors/${r.professorCourse.professor.slug}`}
+                          href={`/professors/${r.professorCourse.professor.publicId}`}
                           target="_blank"
                           className="font-semibold text-foreground hover:underline"
                         >

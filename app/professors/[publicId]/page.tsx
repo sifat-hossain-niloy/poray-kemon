@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
 import { auth } from '@/lib/auth'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ReviewCard } from '@/components/review/ReviewCard'
 import { combineProfessorStats } from '@/lib/professor-stats'
 import { obfuscateName } from '@/lib/name-obfuscation'
+import { isProfessorPublicId } from '@/lib/public-id'
 import { getLocale, getStrings } from '@/lib/i18n'
 import Link from 'next/link'
 
@@ -15,17 +16,25 @@ import Link from 'next/link'
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
-  params: Promise<{ slug: string }>
+  params: Promise<{ publicId: string }>
 }
 
 const REVIEWS_PER_COURSE_PREVIEW = 3
 
+// Resolve either a publicId (canonical) or a legacy name-slug (redirect
+// source). Returns null when neither matches. Called from both the page
+// and generateMetadata so metadata never leaks a name for a URL that's
+// about to redirect anyway.
+async function resolveProfessor(param: string) {
+  if (isProfessorPublicId(param)) {
+    return db.professor.findUnique({ where: { publicId: param } })
+  }
+  return db.professor.findUnique({ where: { slug: param } })
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params
-  const prof = await db.professor.findUnique({
-    where: { slug },
-    select: { nameEn: true, nameBn: true },
-  })
+  const { publicId } = await params
+  const prof = await resolveProfessor(publicId)
   if (!prof) return { title: 'Not found' }
   // Title + meta description are indexed by search engines — never leak the
   // real English name here. Bangla name is fine (different attack surface).
@@ -47,12 +56,23 @@ export default async function ProfessorPage({ params }: PageProps) {
     locale === 'en'
       ? `See all ${n.toLocaleString(numberLocale)} reviews →`
       : `সব ${n.toLocaleString(numberLocale)} রিভিউ দেখুন →`
-  const { slug } = await params
+  const { publicId } = await params
   const session = await auth()
   const viewerId = session?.user?.id ?? null
 
+  // Legacy slug URLs (indexed by search engines, stored in old share
+  // links) still resolve — we 301 to the opaque URL so bookmarks survive.
+  if (!isProfessorPublicId(publicId)) {
+    const legacy = await db.professor.findUnique({
+      where: { slug: publicId },
+      select: { publicId: true },
+    })
+    if (!legacy) notFound()
+    redirect(`/professors/${legacy.publicId}`)
+  }
+
   const professor = await db.professor.findUnique({
-    where: { slug },
+    where: { publicId },
     include: {
       university: true,
       department: true,
@@ -134,7 +154,7 @@ export default async function ProfessorPage({ params }: PageProps) {
         </div>
 
         <div className="mt-6">
-          <Button render={<Link href={`/review/new?professor=${professor.slug}`} />}>
+          <Button render={<Link href={`/review/new?professor=${professor.publicId}`} />}>
             {strings.professor.writeReview}
           </Button>
         </div>
@@ -188,7 +208,9 @@ export default async function ProfessorPage({ params }: PageProps) {
           <div className="space-y-6">
             {professor.professorCourses.map((pc) => {
               const courseSlug = pc.course.slug ?? null
-              const courseHref = courseSlug ? `/professors/${professor.slug}/${courseSlug}` : null
+              const courseHref = courseSlug
+                ? `/professors/${professor.publicId}/${courseSlug}`
+                : null
               const hasReviews = pc.reviewCount > 0
 
               return (

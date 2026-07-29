@@ -39,7 +39,7 @@ export async function POST(req: Request, ctx: RouteCtx) {
       reviewId: true,
       review: {
         select: {
-          professorCourse: { select: { professor: { select: { slug: true } } } },
+          professorCourse: { select: { professor: { select: { publicId: true } } } },
         },
       },
     },
@@ -68,8 +68,8 @@ export async function POST(req: Request, ctx: RouteCtx) {
 
   await Promise.all([
     deleteCache(CACHE_KEYS.siteStats),
-    report.review.professorCourse.professor.slug
-      ? deleteCache(CACHE_KEYS.professorProfile(report.review.professorCourse.professor.slug))
+    report.review.professorCourse.professor.publicId
+      ? deleteCache(CACHE_KEYS.professorProfile(report.review.professorCourse.professor.publicId))
       : Promise.resolve(),
   ])
 

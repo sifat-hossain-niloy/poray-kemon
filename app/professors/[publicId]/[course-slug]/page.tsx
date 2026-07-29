@@ -1,13 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// /professors/[slug]/[course-slug]
+// /professors/[publicId]/[course-slug]
 //
 // Full reviews list for ONE professor teaching ONE course.
 // - Default sort: helpful (FR-VOTE-04). Secondary: most recent.
 // - Pagination: PAGE_SIZE per page via ?page=2.
 // - Per-viewer vote state computed in a single batched query.
+// - Legacy name-slug URLs 301-redirect to the opaque publicId.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { db } from '@/lib/db'
@@ -17,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ReviewCard } from '@/components/review/ReviewCard'
 import { obfuscateName } from '@/lib/name-obfuscation'
+import { isProfessorPublicId } from '@/lib/public-id'
 import { getLocale, getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
@@ -26,16 +28,20 @@ const PAGE_SIZE = 10
 type SortKey = 'helpful' | 'recent'
 
 interface PageProps {
-  params: Promise<{ slug: string; 'course-slug': string }>
+  params: Promise<{ publicId: string; 'course-slug': string }>
   searchParams: Promise<{ sort?: string; page?: string }>
 }
 
+async function resolveProfessor(param: string) {
+  if (isProfessorPublicId(param)) {
+    return db.professor.findUnique({ where: { publicId: param } })
+  }
+  return db.professor.findUnique({ where: { slug: param } })
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params
-  const prof = await db.professor.findUnique({
-    where: { slug },
-    select: { nameEn: true, nameBn: true },
-  })
+  const { publicId } = await params
+  const prof = await resolveProfessor(publicId)
   if (!prof) return { title: 'Not found' }
   return {
     title: `${prof.nameBn ?? obfuscateName(prof.nameEn)} — সব রিভিউ`,
@@ -58,7 +64,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
   const breadcrumbUni = locale === 'en' ? 'Universities' : 'বিশ্ববিদ্যালয়'
   const prevLabel = locale === 'en' ? '← Previous' : '← আগের'
   const nextLabel = locale === 'en' ? 'Next →' : 'পরের →'
-  const { slug, 'course-slug': courseSlug } = await params
+  const { publicId, 'course-slug': courseSlug } = await params
   const { sort: sortRaw, page: pageRaw } = await searchParams
   const sort = parseSort(sortRaw)
   const page = parsePage(pageRaw)
@@ -66,9 +72,20 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
   const session = await auth()
   const viewerId = session?.user?.id ?? null
 
+  // Legacy /professors/<name-slug>/<course-slug> URLs 301-redirect to the
+  // opaque form so existing indexed links keep working.
+  if (!isProfessorPublicId(publicId)) {
+    const legacy = await db.professor.findUnique({
+      where: { slug: publicId },
+      select: { publicId: true },
+    })
+    if (!legacy) notFound()
+    redirect(`/professors/${legacy.publicId}/${courseSlug}`)
+  }
+
   // ── Resolve the professor + their course-slug match ──────────────────────
   const professor = await db.professor.findUnique({
-    where: { slug },
+    where: { publicId },
     include: { university: true, department: true },
   })
   if (!professor) notFound()
@@ -114,14 +131,14 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
 
   const totalPages = Math.max(1, Math.ceil(totalReviews / PAGE_SIZE))
   // Capture into local consts so TypeScript can narrow through the closure
-  const professorSlug = professor.slug
-  const profHref = `/professors/${professorSlug}`
+  const professorPublicId = professor.publicId
+  const profHref = `/professors/${professorPublicId}`
   function pageHref(p: number, s: SortKey = sort) {
     const sp = new URLSearchParams()
     if (s !== 'helpful') sp.set('sort', s)
     if (p > 1) sp.set('page', String(p))
     const qs = sp.toString()
-    return `/professors/${professorSlug}/${courseSlug}${qs ? `?${qs}` : ''}`
+    return `/professors/${professorPublicId}/${courseSlug}${qs ? `?${qs}` : ''}`
   }
 
   return (
@@ -195,7 +212,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
         </SortLink>
         <div className="ml-auto">
           <Button
-            render={<Link href={`/review/new?professor=${professor.slug}`} />}
+            render={<Link href={`/review/new?professor=${professor.publicId}`} />}
             variant="outline"
             size="sm"
           >

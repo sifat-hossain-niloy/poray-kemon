@@ -92,7 +92,9 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
 
     SELECT 'professor' AS kind,
            p.id,
-           p.slug,
+           -- URL identifier: professors use the opaque public_id, never the
+           -- name-based slug (defamation safety — see lib/public-id.ts).
+           p.public_id AS slug,
            p.name_en AS title,
            CONCAT(u.short_name, ' · ', d.short_name) AS subtitle,
            GREATEST(

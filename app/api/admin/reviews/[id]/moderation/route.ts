@@ -44,7 +44,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     where: { id: reviewId },
     select: {
       professorCourseId: true,
-      professorCourse: { select: { professor: { select: { slug: true } } } },
+      professorCourse: { select: { professor: { select: { publicId: true } } } },
     },
   })
   if (!review) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -68,8 +68,8 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   // Invalidate caches the public site reads
   await Promise.all([
     deleteCache(CACHE_KEYS.siteStats),
-    review.professorCourse.professor.slug
-      ? deleteCache(CACHE_KEYS.professorProfile(review.professorCourse.professor.slug))
+    review.professorCourse.professor.publicId
+      ? deleteCache(CACHE_KEYS.professorProfile(review.professorCourse.professor.publicId))
       : Promise.resolve(),
   ])
 
