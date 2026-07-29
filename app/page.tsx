@@ -28,7 +28,7 @@ async function getSiteStats(): Promise<SiteStats> {
   return stats
 }
 
-// Server Component — no 'use client'. Rendered at request time (dynamic).
+// Server Component, no 'use client'. Rendered at request time (dynamic).
 export default async function HomePage() {
   const [stats, strings, locale] = await Promise.all([getSiteStats(), getStrings(), getLocale()])
   const numberLocale = locale === 'en' ? 'en-US' : 'bn-BD'
@@ -60,7 +60,7 @@ export default async function HomePage() {
             <p className="text-lg text-muted-foreground leading-relaxed">{strings.site.tagline}</p>
           </div>
 
-          {/* Live debounced search — results appear as you type */}
+          {/* Live debounced search, results appear as you type */}
           <SearchBox variant="hero" autoFocus />
 
           {/* Site stats */}
@@ -172,7 +172,7 @@ const EN_ANONYMITY: AnonymityCopy = {
   eyebrow: 'Anonymous by construction',
   heading: 'Your review can never be traced to you',
   subheading:
-    "We designed the database so that we — the maintainers — cannot tell who wrote any given review. It's not a promise we're asking you to trust; it's a schema you can verify.",
+    "We designed the database so that we, the maintainers, cannot tell who wrote any given review. It's not a promise we're asking you to trust; it's a schema you can verify.",
   pillars: [
     {
       title: 'No user ID on reviews',
@@ -180,7 +180,7 @@ const EN_ANONYMITY: AnonymityCopy = {
     },
     {
       title: 'Separate submission ledger',
-      body: 'We track "you reviewed this course" in a different table with no shared identifier — so duplicates get blocked without linking you to content.',
+      body: 'We track "you reviewed this course" in a different table with no shared identifier, so duplicates get blocked without linking you to content.',
     },
     {
       title: 'No email stored',
@@ -194,7 +194,7 @@ const BN_ANONYMITY: AnonymityCopy = {
   eyebrow: 'গঠনগতভাবে বেনামী',
   heading: 'আপনার রিভিউ কখনো আপনার পর্যন্ত পৌঁছাবে না',
   subheading:
-    'ডেটাবেস এমনভাবে তৈরি করা যাতে আমরা নিজেরাও কে কোন রিভিউ লিখেছে বলতে না পারি। এটা প্রতিশ্রুতি নয় — কোডে যাচাই করে দেখার মতো একটি স্কিমা।',
+    'ডেটাবেস এমনভাবে তৈরি করা যাতে আমরা নিজেরাও কে কোন রিভিউ লিখেছে বলতে না পারি। এটা প্রতিশ্রুতি নয়, কোডে যাচাই করে দেখার মতো একটি স্কিমা।',
   pillars: [
     {
       title: 'রিভিউয়ে কোনো ইউজার ID নেই',
@@ -202,11 +202,11 @@ const BN_ANONYMITY: AnonymityCopy = {
     },
     {
       title: 'আলাদা সাবমিশন লেজার',
-      body: '“আপনি এই কোর্স রিভিউ করেছেন” — এই তথ্য ভিন্ন টেবিলে রাখা হয়। কোনো সাধারণ আইডি নেই বলে ডুপ্লিকেট ব্লক হয়, কিন্তু কনটেন্টের সাথে জোড়া লাগানো যায় না।',
+      body: '“আপনি এই কোর্স রিভিউ করেছেন”, এই তথ্য ভিন্ন টেবিলে রাখা হয়। কোনো সাধারণ আইডি নেই বলে ডুপ্লিকেট ব্লক হয়, কিন্তু কনটেন্টের সাথে জোড়া লাগানো যায় না।',
     },
     {
       title: 'ইমেইল সংরক্ষণ নয়',
-      body: 'ডুপ্লিকেট ঠেকাতে Google সাইন-ইন ব্যবহার করি — ইমেইল কখনো পাই না, আমাদের ডেটাবেসে রাখারও জায়গা নেই।',
+      body: 'ডুপ্লিকেট ঠেকাতে Google সাইন-ইন ব্যবহার করি, ইমেইল কখনো পাই না, আমাদের ডেটাবেসে রাখারও জায়গা নেই।',
     },
   ],
   readMore: 'সম্পূর্ণ আর্কিটেকচার পড়ুন',
