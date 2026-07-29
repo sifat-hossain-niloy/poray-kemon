@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!dept) return { title: 'Not found' }
   const deptLabel = dept.shortName ?? dept.nameEn
   return {
-    title: `${deptLabel} · ${dept.university.shortName}`,
+    title: `${deptLabel} — ${dept.university.shortName}`,
     description: `${dept.nameEn} এর শিক্ষকবৃন্দ (${dept.university.nameEn})`,
   }
 }
