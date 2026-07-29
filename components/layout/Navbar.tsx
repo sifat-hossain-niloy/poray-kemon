@@ -37,7 +37,10 @@ export function Navbar({ staffRole }: { staffRole: StaffRole | null }) {
     // source of scroll jank on mid-range mobile. The frosted look is kept
     // from sm up, where it is cheap enough.
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background sm:bg-background/80 sm:backdrop-blur sm:supports-[backdrop-filter]:bg-background/60">
-      <nav className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-6">
+      {/* justify-between with a max-w-md-capped flex-1 search: without it,
+          the row's leftover slack all accumulates on the right side of the
+          last child, which reads as a left-shifted navbar on wide screens. */}
+      <nav className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
         {/* Logo */}
         <Link
           href="/"
