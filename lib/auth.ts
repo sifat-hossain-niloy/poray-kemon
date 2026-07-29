@@ -1,6 +1,8 @@
 import NextAuth, { type DefaultSession } from 'next-auth'
 import Google from 'next-auth/providers/google'
+import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
+import { ADMIN_COOKIE_NAME } from '@/lib/admin-auth'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NextAuth v5 — Google OAuth only, JWT strategy, NO adapter.
@@ -129,6 +131,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         ;(session.user as { image?: string | null }).image = null
       }
       return session
+    },
+  },
+
+  events: {
+    // Sessions are mutually exclusive: signing in as a regular user drops
+    // any lingering admin/moderator session in the same browser. The
+    // symmetric case (admin login clearing NextAuth cookies) lives in
+    // app/api/admin/login/route.ts.
+    async signIn() {
+      try {
+        const jar = await cookies()
+        jar.delete(ADMIN_COOKIE_NAME)
+      } catch {
+        // cookies() throws outside a request scope — nothing to clear then
+      }
     },
   },
 

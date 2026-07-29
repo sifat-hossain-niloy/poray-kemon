@@ -17,9 +17,23 @@ import { SearchBox } from '@/components/search/SearchBox'
 import { LanguageToggle } from '@/components/i18n/LanguageToggle'
 import { useStrings } from '@/lib/i18n/client'
 
-export function Navbar() {
+type StaffRole = 'super_admin' | 'admin' | 'moderator'
+
+export function Navbar({ staffRole }: { staffRole: StaffRole | null }) {
   const { data: session, status } = useSession()
   const strings = useStrings()
+
+  // Staff sessions (admin/moderator) are mutually exclusive with user
+  // sessions — the login endpoints clear each other's cookies. But the
+  // NextAuth session cookie may briefly appear alongside if a Google
+  // sign-in raced with our clear; treat staff as authoritative on that
+  // page load and hide user-facing CTAs entirely.
+  const isStaff = staffRole !== null
+
+  async function handleStaffSignOut() {
+    await fetch('/api/admin/logout', { method: 'POST' })
+    window.location.href = '/'
+  }
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -40,63 +54,76 @@ export function Navbar() {
         {/* Language toggle */}
         <LanguageToggle />
 
-        {/* Write-a-review CTA — always visible. Signed-in users go straight
-            to /review/new; signed-out users bounce through Google and land
-            on /review/new after auth (callbackUrl). Kept as a primary Button
-            so it's the clearest action in the navbar. */}
-        {session?.user ? (
-          <Button size="sm" className="shrink-0" render={<Link href="/review/new" />}>
-            {strings.nav.writeReview}
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            className="shrink-0"
-            disabled={status === 'loading'}
-            onClick={() => signIn('google', { callbackUrl: '/review/new' })}
-          >
-            {strings.nav.writeReview}
-          </Button>
-        )}
-
-        {/* Auth */}
-        <div className="flex items-center gap-2 shrink-0">
-          {status === 'loading' ? (
-            <div className="h-9 w-20 animate-pulse rounded-md bg-muted" />
-          ) : session?.user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="ghost" className="h-9 gap-2 px-2">
-                    <Avatar className="h-7 w-7">
-                      <AvatarFallback className="text-xs font-semibold">
-                        {session.user.name?.[0]?.toUpperCase() ?? '?'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="hidden sm:inline text-sm">{session.user.name}</span>
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-56">
-                {/* Base UI's Menu.GroupLabel (wrapped by DropdownMenuLabel)
-                    reads its GroupContext, so it MUST live inside a Group. */}
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>
-                    {strings.auth.signedInAs(session.user.name ?? '')}
-                  </DropdownMenuLabel>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => signOut()}>
-                  {strings.auth.signOut}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button variant="outline" onClick={() => signIn('google')} size="sm">
-              {strings.auth.signInWithGoogle}
+        {isStaff ? (
+          // Staff view: no user-facing CTAs. Just a link back to the
+          // dashboard and a sign-out control so the browser can drop the
+          // staff cookie without visiting /admin/login → sign-out.
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" variant="secondary" render={<Link href="/admin" />}>
+              {staffRole === 'moderator' ? 'Moderator' : 'Admin'}
             </Button>
-          )}
-        </div>
+            <Button size="sm" variant="ghost" onClick={handleStaffSignOut}>
+              {strings.auth.signOut}
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Write-a-review CTA — always visible for the public. Signed-in
+                users go straight to /review/new; signed-out users bounce
+                through Google and land on /review/new after auth. */}
+            {session?.user ? (
+              <Button size="sm" className="shrink-0" render={<Link href="/review/new" />}>
+                {strings.nav.writeReview}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="shrink-0"
+                disabled={status === 'loading'}
+                onClick={() => signIn('google', { callbackUrl: '/review/new' })}
+              >
+                {strings.nav.writeReview}
+              </Button>
+            )}
+
+            {/* Auth control */}
+            <div className="flex items-center gap-2 shrink-0">
+              {status === 'loading' ? (
+                <div className="h-9 w-20 animate-pulse rounded-md bg-muted" />
+              ) : session?.user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button variant="ghost" className="h-9 gap-2 px-2">
+                        <Avatar className="h-7 w-7">
+                          <AvatarFallback className="text-xs font-semibold">
+                            {session.user.name?.[0]?.toUpperCase() ?? '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="hidden sm:inline text-sm">{session.user.name}</span>
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>
+                        {strings.auth.signedInAs(session.user.name ?? '')}
+                      </DropdownMenuLabel>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => signOut()}>
+                      {strings.auth.signOut}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button variant="outline" onClick={() => signIn('google')} size="sm">
+                  {strings.auth.signInWithGoogle}
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </nav>
     </header>
   )
