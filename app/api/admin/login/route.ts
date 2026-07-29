@@ -1,7 +1,26 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { setAdminSessionCookie, type AdminRoleLiteral } from '@/lib/admin-auth'
+
+// Cookie names NextAuth v5 (Auth.js) writes for the user session. We clear
+// them on successful admin login so a browser can't hold both sessions at
+// once. The symmetric case (user Google sign-in clearing the admin cookie)
+// lives in lib/auth.ts `events.signIn`.
+const NEXTAUTH_COOKIE_NAMES = [
+  'authjs.session-token',
+  '__Secure-authjs.session-token',
+  'authjs.csrf-token',
+  '__Host-authjs.csrf-token',
+  'authjs.callback-url',
+  '__Secure-authjs.callback-url',
+] as const
+
+async function clearNextAuthCookies(): Promise<void> {
+  const jar = await cookies()
+  for (const name of NEXTAUTH_COOKIE_NAMES) jar.delete(name)
+}
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs' // bcryptjs needs node, not edge
@@ -85,6 +104,7 @@ export async function POST(req: Request) {
 
   await db.adminUser.update({ where: { id: admin.id }, data: { lastLogin: new Date() } })
   await setAdminSessionCookie(admin.id, role)
+  await clearNextAuthCookies()
 
   // Post-login destination: honour ?from if it's safe; otherwise send the
   // user to the shared dashboard (moderators + admins both land on /admin —

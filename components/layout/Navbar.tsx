@@ -17,7 +17,9 @@ import { SearchBox } from '@/components/search/SearchBox'
 import { LanguageToggle } from '@/components/i18n/LanguageToggle'
 import { useStrings } from '@/lib/i18n/client'
 
-export function Navbar() {
+type StaffRole = 'super_admin' | 'admin' | 'moderator'
+
+export function Navbar({ staffRole }: { staffRole: StaffRole | null }) {
   const { data: session, status } = useSession()
   const strings = useStrings()
 

@@ -142,11 +142,11 @@ async function resolveProfessor(input: {
   departmentId?: number
   nameEn?: string
   nameBn?: string
-}): Promise<{ id: number; slug: string } | null> {
+}): Promise<{ id: number; publicId: string } | null> {
   if (input.professorId) {
     return db.professor.findUnique({
       where: { id: input.professorId },
-      select: { id: true, slug: true },
+      select: { id: true, publicId: true },
     })
   }
 
@@ -165,11 +165,13 @@ async function resolveProfessor(input: {
       departmentId: input.departmentId,
       nameEn: input.nameEn,
     },
-    select: { id: true, slug: true },
+    select: { id: true, publicId: true },
   })
   if (existing) return existing
 
-  // Create — find a non-colliding slug. Plain slug → suffix with uni → suffix with counter.
+  // Create — the opaque public_id gets auto-filled by Postgres (default
+  // pk_gen_public_id(8)). We still generate a legacy name-slug so old
+  // /professors/<name> URLs indexed elsewhere can redirect through.
   let candidateSlug = professorSlug(input.nameEn)
   let collides = await db.professor.findUnique({
     where: { slug: candidateSlug },
@@ -181,7 +183,6 @@ async function resolveProfessor(input: {
       where: { slug: candidateSlug },
       select: { id: true },
     })
-    // Last resort: append a counter
     let n = 2
     while (collides) {
       const trial = `${professorSlug(input.nameEn, university.shortName)}-${n}`
@@ -206,7 +207,7 @@ async function resolveProfessor(input: {
       nameBn: input.nameBn ?? null,
       slug: candidateSlug,
     },
-    select: { id: true, slug: true },
+    select: { id: true, publicId: true },
   })
 }
 
@@ -441,14 +442,16 @@ export async function POST(req: Request) {
   // ── 6. Cache invalidation ─────────────────────────────────────────────────
   await Promise.all([
     deleteCache(CACHE_KEYS.siteStats),
-    deleteCache(CACHE_KEYS.professorProfile(professor.slug)),
+    deleteCache(CACHE_KEYS.professorProfile(professor.publicId)),
   ])
 
   // ── 7. Done ───────────────────────────────────────────────────────────────
+  // `professor_slug` name kept for wire-format back-compat, but the value is
+  // now the opaque public_id — the client uses it to build /professors/<id>.
   return NextResponse.json(
     {
       message: (await getStrings()).reviewResponse.success,
-      professor_slug: professor.slug,
+      professor_slug: professor.publicId,
       moderation_status: verdict.kind === 'soft_flag' ? 'soft_flagged' : 'live',
     },
     { status: 201 },
