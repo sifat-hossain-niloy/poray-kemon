@@ -23,7 +23,7 @@ export default async function AdminReportsPage() {
         include: {
           professorCourse: {
             include: {
-              professor: { select: { nameEn: true, slug: true } },
+              professor: { select: { nameEn: true, publicId: true } },
               course: { select: { courseCode: true, courseName: true } },
             },
           },
@@ -65,7 +65,7 @@ export default async function AdminReportsPage() {
                           {REASON_LABEL[rep.reason] ?? rep.reason}
                         </Badge>
                         <Link
-                          href={`/professors/${r.professorCourse.professor.slug}`}
+                          href={`/professors/${r.professorCourse.professor.publicId}`}
                           target="_blank"
                           className="font-semibold hover:underline"
                         >

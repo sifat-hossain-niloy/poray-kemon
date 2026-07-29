@@ -50,13 +50,13 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
 
   const existing = await db.professor.findUnique({
     where: { id },
-    select: { slug: true },
+    select: { publicId: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await db.professor.update({ where: { id }, data: parsed.data })
 
-  await deleteCache(CACHE_KEYS.professorProfile(existing.slug))
+  await deleteCache(CACHE_KEYS.professorProfile(existing.publicId))
 
   return NextResponse.json({ ok: true })
 }

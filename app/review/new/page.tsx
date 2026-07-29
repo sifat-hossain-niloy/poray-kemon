@@ -4,8 +4,20 @@ import { auth, signIn } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { ReviewForm } from '@/components/review/ReviewForm'
 import { getLocale, getStrings } from '@/lib/i18n'
+import { isProfessorPublicId } from '@/lib/public-id'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+
+// Shared shape for the "preselected professor" panel — extracted so the
+// publicId and legacy-slug branches don't drift.
+const preselectedProfessorSelect = {
+  id: true,
+  nameEn: true,
+  universityId: true,
+  departmentId: true,
+  department: { select: { nameEn: true, shortName: true } },
+  university: { select: { nameEn: true, shortName: true } },
+} as const
 
 export async function generateMetadata(): Promise<Metadata> {
   const strings = await getStrings()
@@ -58,18 +70,20 @@ export default async function NewReviewPage({ searchParams }: PageProps) {
   // client via their own /api/*/search endpoints. This page only pre-loads
   // the preselected professor's full context so the form can render its
   // locked-in cards without a client round-trip.
+  //
+  // The `?professor=<id>` param carries the opaque publicId. Legacy links
+  // that still carry the name-slug also work — the fallback lookup makes
+  // the transition period frictionless.
   const preselected = preselectSlug
-    ? await db.professor.findUnique({
-        where: { slug: preselectSlug },
-        select: {
-          id: true,
-          nameEn: true,
-          universityId: true,
-          departmentId: true,
-          department: { select: { nameEn: true, shortName: true } },
-          university: { select: { nameEn: true, shortName: true } },
-        },
-      })
+    ? isProfessorPublicId(preselectSlug)
+      ? await db.professor.findUnique({
+          where: { publicId: preselectSlug },
+          select: preselectedProfessorSelect,
+        })
+      : await db.professor.findUnique({
+          where: { slug: preselectSlug },
+          select: preselectedProfessorSelect,
+        })
     : null
 
   const helpPrefix = locale === 'en' ? 'Need help? See ' : 'কোনো সমস্যা হলে? '

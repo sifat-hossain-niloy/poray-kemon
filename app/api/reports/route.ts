@@ -129,14 +129,14 @@ export async function POST(req: Request) {
     const professor = await db.professorCourse
       .findUnique({
         where: { id: review.professorCourseId },
-        select: { professor: { select: { slug: true } } },
+        select: { professor: { select: { publicId: true } } },
       })
       .catch(() => null)
 
     await Promise.all([
       deleteCache(CACHE_KEYS.siteStats),
-      professor?.professor?.slug
-        ? deleteCache(CACHE_KEYS.professorProfile(professor.professor.slug))
+      professor?.professor?.publicId
+        ? deleteCache(CACHE_KEYS.professorProfile(professor.professor.publicId))
         : Promise.resolve(),
     ])
   }
