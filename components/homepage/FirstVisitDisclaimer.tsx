@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
@@ -71,6 +71,7 @@ const BN: Copy = {
 
 export function FirstVisitDisclaimer({ locale }: { locale: 'en' | 'bn' }) {
   const [visible, setVisible] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
   const copy = locale === 'en' ? EN : BN
 
   useEffect(() => {
@@ -89,26 +90,60 @@ export function FirstVisitDisclaimer({ locale }: { locale: 'en' | 'bn' }) {
     }
   }, [])
 
-  function dismiss() {
+  const dismiss = useCallback(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, '1')
     } catch {
       // ignore
     }
     setVisible(false)
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!visible) return
+
+    // Freeze the page behind the dialog. Without this, a touch scroll that
+    // runs past the end of the panel chains through to the document and
+    // scrolls the homepage instead, which makes the dialog feel stuck.
+    const body = document.body
+    const previousOverflow = body.style.overflow
+    body.style.overflow = 'hidden'
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') dismiss()
+    }
+    document.addEventListener('keydown', onKeyDown)
+
+    // Move focus into the dialog so keyboard and screen-reader users start
+    // inside it rather than on the frozen page behind.
+    panelRef.current?.focus()
+
+    return () => {
+      body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [visible, dismiss])
 
   if (!visible) return null
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 sm:backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pk-disclaimer-title"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-background border border-border shadow-lg max-h-[90vh] overflow-y-auto">
-        <div className="p-6 sm:p-7 space-y-5">
+      {/* Column layout with a scrolling body and a pinned footer. The button
+          used to sit at the end of one long scroll area, which put it well
+          below the fold on a 667px-tall phone. Height is capped in dvh, not
+          vh: on mobile Safari vh measures the viewport with the toolbars
+          hidden, so a vh-capped panel is taller than what you can see. */}
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className="flex w-full max-w-lg max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl bg-background border border-border shadow-lg outline-none"
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 sm:p-7 space-y-5">
           <div className="space-y-2">
             <h2 id="pk-disclaimer-title" className="text-xl sm:text-2xl font-bold tracking-tight">
               {copy.title}
@@ -135,12 +170,14 @@ export function FirstVisitDisclaimer({ locale }: { locale: 'en' | 'bn' }) {
             </Link>
             <p className="mt-1 text-xs text-muted-foreground">{copy.guidelinesHint}</p>
           </div>
+        </div>
 
-          <div className="flex justify-end">
-            <Button onClick={dismiss} size="sm">
-              {copy.acknowledge}
-            </Button>
-          </div>
+        <div className="flex shrink-0 justify-end border-t border-border bg-background p-4 sm:px-7">
+          {/* Full width and 44px tall on phones so it is an easy thumb target;
+              the compact desktop button is unchanged. */}
+          <Button onClick={dismiss} size="sm" className="h-11 w-full sm:h-7 sm:w-auto">
+            {copy.acknowledge}
+          </Button>
         </div>
       </div>
     </div>
