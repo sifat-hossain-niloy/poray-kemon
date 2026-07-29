@@ -22,7 +22,7 @@ const EN: Copy = {
   points: [
     {
       heading: "Your identity isn't attached to any review.",
-      body: "Reviews live in a separate table from the record that you reviewed a course. Even we can't tell who wrote what — it's not a policy, it's the database schema.",
+      body: "Reviews live in a separate table from the record that you reviewed a course. Even we can't tell who wrote what, it's not a policy, it's the database schema.",
     },
     {
       heading: "We don't verify individual reviews.",
@@ -30,7 +30,7 @@ const EN: Copy = {
     },
     {
       heading: "We're not responsible for what people write.",
-      body: 'We remove content that breaks our guidelines when we see it or when you report it — but until then, reviews reflect their authors, not us.',
+      body: 'We remove content that breaks our guidelines when we see it or when you report it, but until then, reviews reflect their authors, not us.',
     },
     {
       heading: 'Be respectful.',
@@ -39,7 +39,7 @@ const EN: Copy = {
   ],
   guidelinesLink: 'Read the full guidelines',
   guidelinesHint: 'Two-minute read. Worth it if you plan to write.',
-  acknowledge: 'Got it — continue',
+  acknowledge: 'Got it, continue',
 }
 
 const BN: Copy = {
@@ -49,7 +49,7 @@ const BN: Copy = {
   points: [
     {
       heading: 'রিভিউয়ের সাথে আপনার পরিচয় জোড়া থাকে না।',
-      body: 'রিভিউ আর "কে কোন কোর্স রিভিউ করেছে" — এই দুই তথ্য আলাদা টেবিলে রাখা হয়। আমরা নিজেরাও মিলিয়ে দেখতে পারি না। এটা নীতি নয়, ডেটাবেস স্কিমা।',
+      body: 'রিভিউ আর "কে কোন কোর্স রিভিউ করেছে", এই দুই তথ্য আলাদা টেবিলে রাখা হয়। আমরা নিজেরাও মিলিয়ে দেখতে পারি না। এটা নীতি নয়, ডেটাবেস স্কিমা।',
     },
     {
       heading: 'প্রতিটি রিভিউ যাচাই করা হয় না।',
@@ -57,7 +57,7 @@ const BN: Copy = {
     },
     {
       heading: 'রিভিউয়ের বিষয়বস্তুর জন্য আমরা দায়ী নই।',
-      body: 'নিয়ম ভাঙা কনটেন্ট চোখে পড়লে বা রিপোর্ট এলে আমরা সরিয়ে দিই — কিন্তু ততক্ষণ পর্যন্ত রিভিউ লেখকের মতামত, আমাদের নয়।',
+      body: 'নিয়ম ভাঙা কনটেন্ট চোখে পড়লে বা রিপোর্ট এলে আমরা সরিয়ে দিই, কিন্তু ততক্ষণ পর্যন্ত রিভিউ লেখকের মতামত, আমাদের নয়।',
     },
     {
       heading: 'শ্রদ্ধাশীল থাকুন।',
@@ -66,7 +66,7 @@ const BN: Copy = {
   ],
   guidelinesLink: 'পূর্ণাঙ্গ নির্দেশিকা পড়ুন',
   guidelinesHint: 'দুই মিনিটের পড়া। লিখতে চাইলে দেখে নেওয়া ভালো।',
-  acknowledge: 'বুঝেছি — চালিয়ে যাই',
+  acknowledge: 'বুঝেছি, চালিয়ে যাই',
 }
 
 export function FirstVisitDisclaimer({ locale }: { locale: 'en' | 'bn' }) {
@@ -75,7 +75,7 @@ export function FirstVisitDisclaimer({ locale }: { locale: 'en' | 'bn' }) {
 
   useEffect(() => {
     // SSR-safe: state starts false, effect reads localStorage after mount.
-    // The setState-in-effect lint rule is intentional here — we can't read
+    // The setState-in-effect lint rule is intentional here, we can't read
     // localStorage during render (it doesn't exist on the server).
     let acked = false
     try {
