@@ -147,7 +147,7 @@ export default async function DepartmentProfessorsPage({ params }: PageProps) {
             return (
               <Link
                 key={professor.id}
-                href={`/professors/${professor.slug}`}
+                href={`/professors/${professor.publicId}`}
                 className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
               >
                 <Card className="h-full transition-colors group-hover:border-primary/50">
