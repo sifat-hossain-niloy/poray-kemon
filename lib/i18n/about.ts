@@ -31,9 +31,11 @@ export const ABOUT_BN: AboutContent = {
       'আপনি Google দিয়ে সাইন ইন করে রিভিউ লিখলেও — আপনার পরিচয় কখনোই রিভিউ-এর সাথে সংরক্ষিত হয় না। ডাটাবেস ফাঁস হলেও কোন রিভিউ কে লিখেছে তা বের করার কোনো উপায় নেই।',
     ],
     bullets: [
-      '`reviews` টেবিলে `user_id` কলাম নেই — কাঠামোগতভাবেই অসম্ভব।',
-      'কে কোন কোর্সের রিভিউ দিয়েছে সেটা একটি আলাদা টেবিলে (`review_submissions`) থাকে — কিন্তু সেখানে রিভিউ-এর কোনো রেফারেন্স নেই।',
-      'দুই টেবিলে কোনো ফরেন কী যোগসূত্র নেই — তাই JOIN দিয়েও মিলানো যায় না।',
+      'রিভিউ যে টেবিলে থাকে সেখানে ব্যবহারকারী চিহ্নিত করার কোনো কলাম নেই — কাঠামোগতভাবেই অসম্ভব।',
+      '"এই ব্যবহারকারী এই কোর্সে রিভিউ দিয়েছে" এই তথ্য আলাদা একটি টেবিলে থাকে — সেখানে রিভিউয়ের কোনো রেফারেন্স নেই, লেখাও নেই।',
+      'দুই টেবিলে কোনো ফরেন কী যোগসূত্র নেই — সরাসরি JOIN করে মিলানো যায় না।',
+      'দুই টেবিলের আইডিও ভিন্ন ধরনের (একটিতে ক্রমিক সংখ্যা, অন্যটিতে র‍্যান্ডম UUID) — তাই আইডি সাজিয়েও পাশাপাশি বসিয়ে মিলানো সম্ভব নয়।',
+      'সাবমিশন টেবিলে কখন রিভিউ দেওয়া হয়েছে সেই টাইমস্ট্যাম্পও রাখা হয় না — যাতে সময় দিয়েও মিলানো না যায়।',
       'আপনার IP ঠিকানা কোথাও সংরক্ষিত হয় না।',
       'আপনার Google ইমেইল আমরা কখনো সংরক্ষণ করি না — শুধু একটি অভ্যন্তরীণ আইডেন্টিফায়ার।',
     ],
@@ -60,7 +62,7 @@ export const ABOUT_BN: AboutContent = {
     heading: 'যোগাযোগ',
     paragraphs: ['বাগ, প্রস্তাবনা বা মডারেশন বিষয়ক প্রশ্নের জন্য GitHub-এ ইস্যু খুলুন।'],
   },
-  lastUpdated: 'সর্বশেষ আপডেট: জুন ২০২৬',
+  lastUpdated: 'সর্বশেষ আপডেট: জুলাই ২০২৬',
 }
 
 export const ABOUT_EN: AboutContent = {
@@ -78,9 +80,11 @@ export const ABOUT_EN: AboutContent = {
       'You sign in with Google to write a review, but your identity is never stored alongside what you wrote. Even if the database is fully compromised, no review can be traced back to its author.',
     ],
     bullets: [
-      'The `reviews` table has NO `user_id` column — anonymity is structural, not policy-based.',
-      'Who reviewed which professor+course lives in a separate `review_submissions` table — with no reference to the review.',
-      'There is no foreign-key relationship between the two tables — even a hand-written JOIN cannot link them.',
+      'The table holding review content has no user-identifying column at all — anonymity is structural, not policy-based.',
+      'Whether an account has reviewed a given course lives in a separate table — it holds no review content and no reference back to any specific review.',
+      'The two tables share no foreign key — a direct JOIN cannot re-pair them.',
+      'They also use different kinds of identifiers (sequential on the content side, random UUIDs on the submission side), so lining them up by sorted id order does not work either.',
+      'The submission table carries no per-row timestamp, so submissions cannot be matched to reviews by time.',
       'Your IP address is never stored anywhere in the system.',
       'Your Google email is never stored — only an opaque internal identifier.',
     ],
@@ -107,5 +111,5 @@ export const ABOUT_EN: AboutContent = {
     heading: 'Contact',
     paragraphs: ['For bugs, suggestions, or moderation concerns, open an issue on GitHub.'],
   },
-  lastUpdated: 'Last updated: June 2026',
+  lastUpdated: 'Last updated: July 2026',
 }
