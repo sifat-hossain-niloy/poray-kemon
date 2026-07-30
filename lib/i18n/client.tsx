@@ -4,7 +4,7 @@
 // from `./index` — so we don't drag `next/headers` into the client bundle.
 
 import { createContext, useContext } from 'react'
-import { stringsFor, type Locale } from './shared'
+import { DEFAULT_LOCALE, stringsFor, type Locale } from './shared'
 
 interface LocaleContextValue {
   locale: Locale
@@ -26,10 +26,10 @@ export function LocaleProvider({
 
 export function useLocale(): Locale {
   const ctx = useContext(LocaleContext)
-  return ctx?.locale ?? 'bn'
+  return ctx?.locale ?? DEFAULT_LOCALE
 }
 
 export function useStrings() {
   const ctx = useContext(LocaleContext)
-  return ctx?.strings ?? stringsFor('bn')
+  return ctx?.strings ?? stringsFor(DEFAULT_LOCALE)
 }
