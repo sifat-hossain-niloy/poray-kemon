@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Hind_Siliguri, Geist_Mono } from 'next/font/google'
 import { SessionProvider } from 'next-auth/react'
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Navbar } from '@/components/layout/Navbar'
 import { LocaleProvider } from '@/lib/i18n/client'
 import { getLocale, getStrings } from '@/lib/i18n'
@@ -82,6 +84,10 @@ export default async function RootLayout({
             <div className="flex flex-1 flex-col">{children}</div>
           </LocaleProvider>
         </SessionProvider>
+        {/* Vercel Analytics + Speed Insights. Both packages no-op outside
+            Vercel deploys, so they add zero cost in local dev and preview. */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )
