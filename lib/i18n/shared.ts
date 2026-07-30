@@ -5,7 +5,7 @@ import { BN } from './strings-bn'
 import { EN } from './strings-en'
 
 export type Locale = 'bn' | 'en'
-export const DEFAULT_LOCALE: Locale = 'bn'
+export const DEFAULT_LOCALE: Locale = 'en'
 export const LOCALE_COOKIE_NAME = 'pk_lang'
 
 export const STRING_BUNDLES = { bn: BN, en: EN } as const
