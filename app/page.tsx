@@ -66,19 +66,23 @@ export default async function HomePage() {
           {/* Live debounced search, results appear as you type */}
           <SearchBox variant="hero" autoFocus />
 
-          {/* Site stats */}
+          {/* Site stats — each card links to its own listing so a
+              new visitor can jump straight into content. */}
           <div className="grid grid-cols-3 gap-4 pt-4">
             <StatCard
+              href="/reviews"
               value={stats.totalReviews}
               label={strings.stats.totalReviews(stats.totalReviews)}
               numberLocale={numberLocale}
             />
             <StatCard
+              href="/professors"
               value={stats.totalProfessors}
               label={strings.stats.totalProfessors(stats.totalProfessors)}
               numberLocale={numberLocale}
             />
             <StatCard
+              href="/universities"
               value={stats.totalUniversities}
               label={strings.stats.totalUniversities(stats.totalUniversities)}
               numberLocale={numberLocale}
@@ -221,17 +225,22 @@ function StatCard({
   value,
   label,
   numberLocale,
+  href,
 }: {
   value: number
   label: string
   numberLocale: string
+  href: string
 }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-border bg-card p-4 shadow-sm">
+    <Link
+      href={href}
+      className="flex flex-col items-center rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted"
+    >
       <span className="text-2xl font-bold text-foreground tabular-nums">
         {value.toLocaleString(numberLocale)}
       </span>
       <span className="mt-1 text-xs text-muted-foreground leading-snug">{label}</span>
-    </div>
+    </Link>
   )
 }

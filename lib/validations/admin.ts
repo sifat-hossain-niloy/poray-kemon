@@ -40,6 +40,12 @@ export const departmentCreateSchema = z.object({
 
 export const departmentUpdateSchema = departmentCreateSchema
   .partial()
+  .extend({
+    // Verify workflow: admin flips `unverified` → `verified` from the queue.
+    // Downgrading (verified → unverified) is also permitted for the merge/undo
+    // flow, but there's no UI for it today.
+    status: z.enum(['verified', 'unverified']).optional(),
+  })
   .refine((data) => Object.values(data).some((v) => v !== undefined && v !== ''), {
     message: 'At least one field is required',
   })

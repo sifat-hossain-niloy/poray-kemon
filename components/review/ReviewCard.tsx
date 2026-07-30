@@ -50,7 +50,7 @@ export function ReviewCard({ review, userVoted = false }: Props) {
   return (
     <Card>
       <CardContent className="space-y-3 py-4">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
           <StarsInline value={review.teachingQuality} label={strings.ratings.teachingQuality} />
           <StarsInline value={review.gradingFairness} label={strings.ratings.gradingFairness} />
           <Badge variant={review.wouldRecommend ? 'default' : 'outline'} className="ml-auto">
@@ -96,9 +96,12 @@ export function ReviewCard({ review, userVoted = false }: Props) {
 
 function StarsInline({ value, label }: { value: number; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-muted-foreground" title={label}>
-      <span className="text-yellow-500">{'★'.repeat(value)}</span>
-      <span className="text-muted-foreground/40">{'★'.repeat(5 - value)}</span>
+    <span className="inline-flex items-center gap-1.5">
+      <span className="text-muted-foreground">{label}:</span>
+      <span aria-label={`${label} ${value} out of 5`}>
+        <span className="text-yellow-500">{'★'.repeat(value)}</span>
+        <span className="text-muted-foreground/40">{'★'.repeat(5 - value)}</span>
+      </span>
     </span>
   )
 }
