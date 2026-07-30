@@ -17,7 +17,7 @@ import { SearchBox } from '@/components/search/SearchBox'
 import { LanguageToggle } from '@/components/i18n/LanguageToggle'
 import { useStrings } from '@/lib/i18n/client'
 
-export function Navbar() {
+export function Navbar({ isStaff = false }: { isStaff?: boolean }) {
   const { data: session, status } = useSession()
   const strings = useStrings()
 
@@ -54,65 +54,71 @@ export function Navbar() {
 
           <LanguageToggle />
 
-          {session?.user ? (
-            <Button size="sm" className="shrink-0" render={<Link href="/review/new" />}>
-              {writeReviewLabel}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              className="shrink-0"
-              disabled={status === 'loading'}
-              onClick={() => signIn('google', { callbackUrl: '/review/new' })}
-            >
-              {writeReviewLabel}
-            </Button>
-          )}
-
-          <div className="flex items-center gap-2 shrink-0">
-            {status === 'loading' ? (
-              <div className="h-9 w-9 animate-pulse rounded-md bg-muted sm:w-20" />
-            ) : session?.user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button variant="ghost" className="h-9 gap-2 px-1 sm:px-2">
-                      <Avatar className="h-7 w-7">
-                        <AvatarFallback className="text-xs font-semibold">
-                          {session.user.name?.[0]?.toUpperCase() ?? '?'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="hidden sm:inline text-sm">{session.user.name}</span>
-                    </Button>
-                  }
-                />
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>
-                      {strings.auth.signedInAs(session.user.name ?? '')}
-                    </DropdownMenuLabel>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => signOut()}>
-                    {strings.auth.signOut}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {/* Hide the user-flow CTAs entirely for staff sessions — staff use
+              the admin bar below and shouldn't see "Sign in with Google" or
+              "Write a review" from their moderation surface. */}
+          {!isStaff &&
+            (session?.user ? (
+              <Button size="sm" className="shrink-0" render={<Link href="/review/new" />}>
+                {writeReviewLabel}
+              </Button>
             ) : (
-              // Icon-only on phones so the sign-in affordance stays visible
-              // without stretching the row past the viewport width.
               <Button
-                variant="outline"
-                onClick={() => signIn('google')}
                 size="sm"
                 className="shrink-0"
-                aria-label={strings.auth.signInWithGoogle}
+                disabled={status === 'loading'}
+                onClick={() => signIn('google', { callbackUrl: '/review/new' })}
               >
-                <span className="hidden sm:inline">{strings.auth.signInWithGoogle}</span>
-                <span className="sm:hidden text-sm font-semibold">Sign in</span>
+                {writeReviewLabel}
               </Button>
-            )}
-          </div>
+            ))}
+
+          {!isStaff && (
+            <div className="flex items-center gap-2 shrink-0">
+              {status === 'loading' ? (
+                <div className="h-9 w-9 animate-pulse rounded-md bg-muted sm:w-20" />
+              ) : session?.user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button variant="ghost" className="h-9 gap-2 px-1 sm:px-2">
+                        <Avatar className="h-7 w-7">
+                          <AvatarFallback className="text-xs font-semibold">
+                            {session.user.name?.[0]?.toUpperCase() ?? '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="hidden sm:inline text-sm">{session.user.name}</span>
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>
+                        {strings.auth.signedInAs(session.user.name ?? '')}
+                      </DropdownMenuLabel>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => signOut()}>
+                      {strings.auth.signOut}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                // Icon-only on phones so the sign-in affordance stays visible
+                // without stretching the row past the viewport width.
+                <Button
+                  variant="outline"
+                  onClick={() => signIn('google')}
+                  size="sm"
+                  className="shrink-0"
+                  aria-label={strings.auth.signInWithGoogle}
+                >
+                  <span className="hidden sm:inline">{strings.auth.signInWithGoogle}</span>
+                  <span className="sm:hidden text-sm font-semibold">Sign in</span>
+                </Button>
+              )}
+            </div>
+          )}
         </nav>
 
         {/* Second row on mobile only — full-width search. */}
