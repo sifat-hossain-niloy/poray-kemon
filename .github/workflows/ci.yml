@@ -105,6 +105,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://poraykemon:secret@localhost:5433/poraykemon_test
+      DIRECT_URL: postgresql://poraykemon:secret@localhost:5433/poraykemon_test
       DATABASE_URL_TEST: postgresql://poraykemon:secret@localhost:5433/poraykemon_test
       REDIS_URL: redis://localhost:6379
       NEXTAUTH_SECRET: test-secret-not-real
@@ -141,6 +142,7 @@ jobs:
     needs: [unit-tests, integration-tests]
     env:
       DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+      DIRECT_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
       REDIS_URL: redis://localhost:6379
       NEXTAUTH_SECRET: build-time-placeholder
       NEXTAUTH_URL: http://localhost:3000
