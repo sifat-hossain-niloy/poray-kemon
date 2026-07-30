@@ -35,6 +35,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   if (d.nameBn !== undefined) data.nameBn = d.nameBn || null
   if (d.shortName !== undefined) data.shortName = d.shortName || null
   if (d.slug !== undefined) data.slug = d.slug || null
+  if (d.status !== undefined) data.status = d.status
 
   try {
     await db.department.update({ where: { id }, data })

@@ -51,6 +51,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               >
                 Uni requests
               </Link>
+              <Link
+                href="/admin/departments"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Departments
+              </Link>
               {canAdmin(session.role) ? (
                 <Link
                   href="/admin/universities"
