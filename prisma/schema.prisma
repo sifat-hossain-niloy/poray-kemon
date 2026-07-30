@@ -228,13 +228,19 @@ model Review {
   @@map("reviews")
 }
 
-// Tracks who reviewed which professor+course.
-// Intentionally decoupled from reviews — no shared foreign key.
+// Tracks who reviewed which professor+course. Deliberately kept as
+// content-free as possible so it cannot be joined against `reviews`
+// to re-pair authorship:
+//   * UUID primary key, drawn from a space unrelated to reviews.id
+//     (previously both tables had auto-increment ids that grew in
+//      lockstep because rows were always written 1:1 per submission).
+//   * NO submitted_at column — Postgres now() is transaction-scoped,
+//     so a shared timestamp would have re-created the join key that
+//     the UUID switch just removed.
 model ReviewSubmission {
-  id                Int      @id @default(autoincrement())
-  userId            String   @map("user_id") @db.Uuid
-  professorCourseId Int      @map("professor_course_id")
-  submittedAt       DateTime @default(now()) @map("submitted_at")
+  id                String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String @map("user_id") @db.Uuid
+  professorCourseId Int    @map("professor_course_id")
 
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   professorCourse ProfessorCourse @relation(fields: [professorCourseId], references: [id])
