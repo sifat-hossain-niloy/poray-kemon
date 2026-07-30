@@ -81,8 +81,8 @@ export default async function RecentReviewsPage() {
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             {locale === 'en'
-              ? 'No reviews have been posted yet — you could be the first.'
-              : 'এখনো কোনো রিভিউ নেই — আপনিই প্রথম হতে পারেন।'}
+              ? 'No reviews have been posted yet. You could be the first.'
+              : 'এখনো কোনো রিভিউ নেই। আপনিই প্রথম হতে পারেন।'}
           </CardContent>
         </Card>
       ) : (
