@@ -72,7 +72,10 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
 
     SELECT 'department' AS kind,
            d.id,
-           CONCAT(u.slug, '/', d.slug) AS slug,
+           -- The href builder below prepends /universities/, so this slug
+           -- must include the intermediate /departments/ segment to match
+           -- the actual route: /universities/{uni}/departments/{dept}.
+           CONCAT(u.slug, '/departments/', d.slug) AS slug,
            -- Prefer the abbreviation when present (more recognisable),
            -- fall back to the full name when the dept has no short_name.
            CONCAT(u.short_name, ' · ', COALESCE(d.short_name, d.name_en)) AS title,
