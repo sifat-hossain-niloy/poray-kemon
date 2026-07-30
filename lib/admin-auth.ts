@@ -52,10 +52,11 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-function fromBase64Url(s: string): Uint8Array {
+function fromBase64Url(s: string): Uint8Array<ArrayBuffer> {
   const padded = s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)
   const bin = atob(padded)
-  const view = new Uint8Array(bin.length)
+  const buf = new ArrayBuffer(bin.length)
+  const view = new Uint8Array(buf)
   for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i)
   return view
 }
