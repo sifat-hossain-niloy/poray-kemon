@@ -28,7 +28,10 @@ async function getSiteStats(): Promise<SiteStats> {
   return stats
 }
 
-// Server Component, no 'use client'. Rendered at request time (dynamic).
+// Homepage reads live counts from Postgres/Redis. Force dynamic so Next 16
+// doesn't try to prerender it at build time (build has no DB reachable).
+export const dynamic = 'force-dynamic'
+
 export default async function HomePage() {
   const [stats, strings, locale] = await Promise.all([getSiteStats(), getStrings(), getLocale()])
   const numberLocale = locale === 'en' ? 'en-US' : 'bn-BD'
