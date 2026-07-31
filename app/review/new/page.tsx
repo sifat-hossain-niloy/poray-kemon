@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { auth, signIn } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { ReviewForm } from '@/components/review/ReviewForm'

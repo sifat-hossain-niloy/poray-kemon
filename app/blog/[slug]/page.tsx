@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { notFound } from 'next/navigation'
 import { getAllSlugs, getPost, type BlockNode } from '@/lib/blog/posts'
 import { getLocale } from '@/lib/i18n'
+import { localeAlternates } from '@/lib/i18n/alternates'
 
 export const revalidate = 3600
 
@@ -20,15 +21,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params
   const post = getPost(slug)
   if (!post) return { title: 'Not found' }
-  const canonical = `/blog/${post.slug}`
+  const locale = await getLocale()
+  const alt = localeAlternates(`/blog/${post.slug}`, locale)
   return {
     title: post.title,
     description: post.description,
-    alternates: { canonical },
+    alternates: { canonical: alt.canonical, languages: alt.languages },
     openGraph: {
       title: post.title,
       description: post.description,
-      url: canonical,
+      url: alt.canonical,
       type: 'article',
       publishedTime: post.publishedAt,
     },

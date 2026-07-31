@@ -1,7 +1,9 @@
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
+import { getLocale } from '@/lib/i18n'
+import { localeAlternates } from '@/lib/i18n/alternates'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -28,7 +30,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     },
   })
   if (!uni) return { title: 'Not found' }
-  const canonical = `/universities/${uni.slug}`
+  const locale = await getLocale()
+  const alt = localeAlternates(`/universities/${uni.slug}`, locale)
   const title = `${uni.shortName} (${uni.nameEn}) — professor reviews`
   const description =
     `Anonymous student reviews of professors and courses at ${uni.nameEn} (${uni.shortName}). ` +
@@ -36,8 +39,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    alternates: { canonical },
-    openGraph: { title, description, url: canonical, type: 'website' },
+    alternates: { canonical: alt.canonical, languages: alt.languages },
+    openGraph: { title, description, url: alt.canonical, type: 'website' },
     twitter: { card: 'summary', title, description },
   }
 }

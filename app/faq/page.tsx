@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { getLocale } from '@/lib/i18n'
 import { FAQ_BN, FAQ_EN } from '@/lib/i18n/faq'
+import { localeAlternates } from '@/lib/i18n/alternates'
 import { Card, CardContent } from '@/components/ui/card'
 
 export const revalidate = 3600
@@ -9,15 +10,15 @@ export const revalidate = 3600
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale()
   const content = locale === 'en' ? FAQ_EN : FAQ_BN
-  const canonical = '/faq'
+  const alt = localeAlternates('/faq', locale)
   return {
     title: content.title,
     description: content.intro,
-    alternates: { canonical },
+    alternates: { canonical: alt.canonical, languages: alt.languages },
     openGraph: {
       title: content.title,
       description: content.intro,
-      url: canonical,
+      url: alt.canonical,
       type: 'website',
     },
     twitter: { card: 'summary', title: content.title, description: content.intro },

@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { combineProfessorStats } from '@/lib/professor-stats'
 import { obfuscateName } from '@/lib/name-obfuscation'
 import { getLocale, getStrings } from '@/lib/i18n'
+import { localeAlternates } from '@/lib/i18n/alternates'
 
 export const revalidate = 300
 
@@ -29,7 +30,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   })
   if (!dept) return { title: 'Not found' }
   const deptLabel = dept.shortName ?? dept.nameEn
-  const canonical = `/universities/${dept.university.slug}/departments/${dept.slug ?? deptSlug}`
+  const locale = await getLocale()
+  const alt = localeAlternates(
+    `/universities/${dept.university.slug}/departments/${dept.slug ?? deptSlug}`,
+    locale,
+  )
   const title = `${deptLabel}, ${dept.university.shortName} — professor reviews from students`
   const description =
     `Anonymous student reviews of ${dept.nameEn} professors at ${dept.university.nameEn} ` +
@@ -37,8 +42,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    alternates: { canonical },
-    openGraph: { title, description, url: canonical, type: 'website' },
+    alternates: { canonical: alt.canonical, languages: alt.languages },
+    openGraph: { title, description, url: alt.canonical, type: 'website' },
     twitter: { card: 'summary', title, description },
   }
 }

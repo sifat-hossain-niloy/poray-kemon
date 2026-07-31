@@ -8,9 +8,22 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://poraykemon.com'
 // universities/professors show up in search engines within a crawl.
 export const dynamic = 'force-dynamic'
 
-// A single sitemap covers everything we want indexed today. If the
-// catalog grows past ~40k URLs we should split into per-university
-// sub-sitemaps and reference them from a sitemap index.
+// Every canonical URL is emitted once per locale. hreflang alternates point
+// each localized URL at its siblings so Google can index /en and /bn as
+// distinct-language versions of the same content.
+function localized(
+  path: string,
+  extras: Omit<MetadataRoute.Sitemap[number], 'url' | 'alternates'>,
+): MetadataRoute.Sitemap {
+  const enUrl = `${SITE_URL}/en${path === '/' ? '' : path}`
+  const bnUrl = `${SITE_URL}/bn${path === '/' ? '' : path}`
+  const languages = { en: enUrl, bn: bnUrl, 'x-default': enUrl }
+  return [
+    { url: enUrl, alternates: { languages }, ...extras },
+    { url: bnUrl, alternates: { languages }, ...extras },
+  ]
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [universities, departments, professors] = await Promise.all([
     db.university.findMany({ select: { slug: true, createdAt: true } }),
@@ -31,48 +44,52 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ])
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: `${SITE_URL}/`, changeFrequency: 'daily', priority: 1.0 },
-    { url: `${SITE_URL}/universities`, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${SITE_URL}/professors`, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${SITE_URL}/reviews`, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${SITE_URL}/blog`, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${SITE_URL}/faq`, changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${SITE_URL}/about`, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${SITE_URL}/guidelines`, changeFrequency: 'monthly', priority: 0.5 },
+    ...localized('/', { changeFrequency: 'daily', priority: 1.0 }),
+    ...localized('/universities', { changeFrequency: 'weekly', priority: 0.9 }),
+    ...localized('/professors', { changeFrequency: 'daily', priority: 0.9 }),
+    ...localized('/reviews', { changeFrequency: 'daily', priority: 0.8 }),
+    ...localized('/blog', { changeFrequency: 'weekly', priority: 0.7 }),
+    ...localized('/faq', { changeFrequency: 'monthly', priority: 0.6 }),
+    ...localized('/about', { changeFrequency: 'monthly', priority: 0.5 }),
+    ...localized('/guidelines', { changeFrequency: 'monthly', priority: 0.5 }),
   ]
 
   const blogPosts = getAllPosts()
-  const blogUrls: MetadataRoute.Sitemap = blogPosts.map((p) => ({
-    url: `${SITE_URL}/blog/${p.slug}`,
-    lastModified: new Date(p.publishedAt),
-    changeFrequency: 'monthly' as const,
-    priority: 0.6,
-  }))
+  const blogUrls: MetadataRoute.Sitemap = blogPosts.flatMap((p) =>
+    localized(`/blog/${p.slug}`, {
+      lastModified: new Date(p.publishedAt),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    }),
+  )
 
-  const universityUrls: MetadataRoute.Sitemap = universities.map((u) => ({
-    url: `${SITE_URL}/universities/${u.slug}`,
-    lastModified: u.createdAt,
-    changeFrequency: 'weekly' as const,
-    priority: 0.8,
-  }))
+  const universityUrls: MetadataRoute.Sitemap = universities.flatMap((u) =>
+    localized(`/universities/${u.slug}`, {
+      lastModified: u.createdAt,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    }),
+  )
 
   const departmentUrls: MetadataRoute.Sitemap = departments
     .filter((d): d is typeof d & { slug: string } => d.slug !== null)
-    .map((d) => ({
-      url: `${SITE_URL}/universities/${d.university.slug}/departments/${d.slug}`,
-      lastModified: d.createdAt,
-      changeFrequency: 'weekly' as const,
-      priority: 0.7,
-    }))
+    .flatMap((d) =>
+      localized(`/universities/${d.university.slug}/departments/${d.slug}`, {
+        lastModified: d.createdAt,
+        changeFrequency: 'weekly',
+        priority: 0.7,
+      }),
+    )
 
   // Only include professors who have at least one review — an empty
   // professor page has no indexable content and dilutes the crawl budget.
-  const professorUrls: MetadataRoute.Sitemap = professors.map((p) => ({
-    url: `${SITE_URL}/professors/${p.publicId}`,
-    lastModified: p.createdAt,
-    changeFrequency: 'weekly' as const,
-    priority: 0.6,
-  }))
+  const professorUrls: MetadataRoute.Sitemap = professors.flatMap((p) =>
+    localized(`/professors/${p.publicId}`, {
+      lastModified: p.createdAt,
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    }),
+  )
 
   return [...staticPages, ...blogUrls, ...universityUrls, ...departmentUrls, ...professorUrls]
 }

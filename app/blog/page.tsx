@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getAllPosts } from '@/lib/blog/posts'
 import { getLocale } from '@/lib/i18n'
+import { localeAlternates } from '@/lib/i18n/alternates'
 
 export const revalidate = 3600
 
@@ -10,12 +11,16 @@ const TITLE = 'Blog | Poray Kemon'
 const DESCRIPTION =
   'Short essays on how anonymous course reviews work, how to write a fair review, and what students can learn from real classroom feedback.'
 
-export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: '/blog' },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: '/blog', type: 'website' },
-  twitter: { card: 'summary', title: TITLE, description: DESCRIPTION },
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale()
+  const alt = localeAlternates('/blog', locale)
+  return {
+    title: TITLE,
+    description: DESCRIPTION,
+    alternates: { canonical: alt.canonical, languages: alt.languages },
+    openGraph: { title: TITLE, description: DESCRIPTION, url: alt.canonical, type: 'website' },
+    twitter: { card: 'summary', title: TITLE, description: DESCRIPTION },
+  }
 }
 
 export default async function BlogIndexPage() {
