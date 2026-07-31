@@ -21,27 +21,34 @@ interface PageProps {
 
 const REVIEWS_PER_COURSE_PREVIEW = 3
 
-// Resolve either a publicId (canonical) or a legacy name-slug (redirect
-// source). Returns null when neither matches. Called from both the page
-// and generateMetadata so metadata never leaks a name for a URL that's
-// about to redirect anyway.
-async function resolveProfessor(param: string) {
-  if (isProfessorPublicId(param)) {
-    return db.professor.findUnique({ where: { publicId: param } })
-  }
-  return db.professor.findUnique({ where: { slug: param } })
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { publicId } = await params
-  const prof = await resolveProfessor(publicId)
+  const prof = await db.professor.findUnique({
+    where: isProfessorPublicId(publicId) ? { publicId } : { slug: publicId },
+    include: {
+      university: { select: { shortName: true, nameEn: true } },
+      department: { select: { shortName: true, nameEn: true } },
+      _count: { select: { professorCourses: true } },
+    },
+  })
   if (!prof) return { title: 'Not found' }
-  // Title + meta description are indexed by search engines — never leak the
-  // real English name here. Bangla name is fine (different attack surface).
+  // Title + description are indexed by search engines — the English name is
+  // obfuscated by contract (see lib/name-obfuscation.ts). Bangla name is
+  // allowed since the attack surface for defamation-by-Google is Latin text.
   const displayEn = obfuscateName(prof.nameEn)
+  const displayName = prof.nameBn ?? displayEn
+  const deptLabel = prof.department.shortName ?? prof.department.nameEn
+  const canonical = `/professors/${prof.publicId}`
+  const title = `${displayName} — ${deptLabel}, ${prof.university.shortName}`
+  const description =
+    `Anonymous student reviews and ratings for ${displayName}, ${deptLabel} at ` +
+    `${prof.university.nameEn} (${prof.university.shortName}).`
   return {
-    title: prof.nameBn ?? displayEn,
-    description: `${displayEn} এর শিক্ষাগত রিভিউ ও রেটিং`,
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { title, description, url: canonical, type: 'profile' },
+    twitter: { card: 'summary', title, description },
   }
 }
 
@@ -118,8 +125,44 @@ export default async function ProfessorPage({ params }: PageProps) {
     votes.forEach((v) => votedIds.add(v.reviewId))
   }
 
+  // JSON-LD: Person + AggregateRating so Google may show a star rating on
+  // the SERP tile. The `name` uses the obfuscated English rendering — never
+  // the raw one — so no defamation-safety escape hatch is opened.
+  const jsonLdName = professor.nameBn ?? obfuscateName(professor.nameEn)
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: jsonLdName,
+    jobTitle: professor.designation ?? undefined,
+    worksFor: {
+      '@type': 'CollegeOrUniversity',
+      name: professor.university.nameEn,
+      alternateName: professor.university.shortName,
+    },
+    memberOf: {
+      '@type': 'CollegeDepartment',
+      name: professor.department.nameEn,
+      ...(professor.department.shortName ? { alternateName: professor.department.shortName } : {}),
+    },
+    ...(combined.totalReviews > 0 && combined.overallScore !== null
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: combined.overallScore.toFixed(2),
+            bestRating: '5',
+            worstRating: '1',
+            reviewCount: combined.totalReviews,
+          },
+        }
+      : {}),
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="mb-8">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
