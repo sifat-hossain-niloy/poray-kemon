@@ -22,14 +22,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       nameEn: true,
       nameBn: true,
       shortName: true,
-      university: { select: { shortName: true, nameEn: true } },
+      slug: true,
+      university: { select: { shortName: true, nameEn: true, slug: true } },
+      _count: { select: { professors: true } },
     },
   })
   if (!dept) return { title: 'Not found' }
   const deptLabel = dept.shortName ?? dept.nameEn
+  const canonical = `/universities/${dept.university.slug}/departments/${dept.slug ?? deptSlug}`
+  const title = `${deptLabel}, ${dept.university.shortName} — professor reviews from students`
+  const description =
+    `Anonymous student reviews of ${dept.nameEn} professors at ${dept.university.nameEn} ` +
+    `(${dept.university.shortName}). ${dept._count.professors} professors listed.`
   return {
-    title: `${deptLabel} — ${dept.university.shortName}`,
-    description: `${dept.nameEn} এর শিক্ষকবৃন্দ (${dept.university.nameEn})`,
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { title, description, url: canonical, type: 'website' },
+    twitter: { card: 'summary', title, description },
   }
 }
 
@@ -69,6 +79,20 @@ export default async function DepartmentProfessorsPage({ params }: PageProps) {
   if (!dept) notFound()
 
   const deptLabel = dept.shortName ?? dept.nameEn
+
+  // JSON-LD: department nested under its university. Google can render this
+  // as a knowledge-panel snippet for "<dept> at <uni>" style queries.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollegeDepartment',
+    name: dept.nameEn,
+    ...(dept.shortName ? { alternateName: dept.shortName } : {}),
+    parentOrganization: {
+      '@type': 'CollegeOrUniversity',
+      name: dept.university.nameEn,
+      alternateName: dept.university.shortName,
+    },
+  }
   const backLabel = locale === 'en' ? '← Departments' : '← বিভাগসমূহ'
   const headingProfessors = locale === 'en' ? 'Professors' : 'শিক্ষকবৃন্দ'
   const emptyLabel =
@@ -104,6 +128,10 @@ export default async function DepartmentProfessorsPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Breadcrumb + header */}
       <div className="mb-8">
         <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
