@@ -4,6 +4,7 @@ import { SessionProvider } from 'next-auth/react'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Navbar } from '@/components/layout/Navbar'
+import { Footer } from '@/components/layout/Footer'
 import { LocaleProvider } from '@/lib/i18n/client'
 import { getLocale, getStrings } from '@/lib/i18n'
 import { getAdminSession } from '@/lib/admin-auth'
@@ -82,6 +83,7 @@ export default async function RootLayout({
           <LocaleProvider locale={locale}>
             <Navbar isStaff={isStaff} />
             <div className="flex flex-1 flex-col">{children}</div>
+            <Footer />
           </LocaleProvider>
         </SessionProvider>
         {/* Vercel Analytics + Speed Insights. Both packages no-op outside

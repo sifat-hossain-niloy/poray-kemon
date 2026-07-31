@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { db } from '@/lib/db'
+import { getAllPosts } from '@/lib/blog/posts'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://poraykemon.com'
 
@@ -34,9 +35,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/universities`, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${SITE_URL}/professors`, changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE_URL}/reviews`, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${SITE_URL}/blog`, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${SITE_URL}/faq`, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${SITE_URL}/about`, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${SITE_URL}/guidelines`, changeFrequency: 'monthly', priority: 0.5 },
   ]
+
+  const blogPosts = getAllPosts()
+  const blogUrls: MetadataRoute.Sitemap = blogPosts.map((p) => ({
+    url: `${SITE_URL}/blog/${p.slug}`,
+    lastModified: new Date(p.publishedAt),
+    changeFrequency: 'monthly' as const,
+    priority: 0.6,
+  }))
 
   const universityUrls: MetadataRoute.Sitemap = universities.map((u) => ({
     url: `${SITE_URL}/universities/${u.slug}`,
@@ -63,5 +74,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }))
 
-  return [...staticPages, ...universityUrls, ...departmentUrls, ...professorUrls]
+  return [...staticPages, ...blogUrls, ...universityUrls, ...departmentUrls, ...professorUrls]
 }
