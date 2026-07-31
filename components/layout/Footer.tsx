@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { getLocale, getStrings } from '@/lib/i18n'
 
 // Footer doubles as internal-linking scaffolding — every public page carries

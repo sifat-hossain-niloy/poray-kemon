@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import type { SearchResult, SearchResultKind } from '@/lib/search'
 import { useStrings, useLocale } from '@/lib/i18n/client'
 import { Badge } from '@/components/ui/badge'

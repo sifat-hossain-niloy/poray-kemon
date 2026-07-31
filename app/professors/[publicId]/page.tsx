@@ -10,7 +10,8 @@ import { combineProfessorStats } from '@/lib/professor-stats'
 import { obfuscateName } from '@/lib/name-obfuscation'
 import { isProfessorPublicId } from '@/lib/public-id'
 import { getLocale, getStrings } from '@/lib/i18n'
-import Link from 'next/link'
+import { localeAlternates } from '@/lib/i18n/alternates'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 
 // Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
@@ -38,7 +39,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const displayEn = obfuscateName(prof.nameEn)
   const displayName = prof.nameBn ?? displayEn
   const deptLabel = prof.department.shortName ?? prof.department.nameEn
-  const canonical = `/professors/${prof.publicId}`
+  const locale = await getLocale()
+  const alt = localeAlternates(`/professors/${prof.publicId}`, locale)
   const title = `${displayName} — ${deptLabel}, ${prof.university.shortName}`
   const description =
     `Anonymous student reviews and ratings for ${displayName}, ${deptLabel} at ` +
@@ -46,8 +48,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    alternates: { canonical },
-    openGraph: { title, description, url: canonical, type: 'profile' },
+    alternates: { canonical: alt.canonical, languages: alt.languages },
+    openGraph: { title, description, url: alt.canonical, type: 'profile' },
     twitter: { card: 'summary', title, description },
   }
 }
