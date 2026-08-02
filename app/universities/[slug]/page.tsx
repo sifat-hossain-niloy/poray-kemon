@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { db } from '@/lib/db'
 import { getLocale } from '@/lib/i18n'
 import { localeAlternates } from '@/lib/i18n/alternates'
+import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -47,6 +48,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function UniversityPage({ params }: PageProps) {
   const { slug } = await params
+  const locale = await getLocale()
   const uni = await db.university.findUnique({
     where: { slug },
     include: {
@@ -87,11 +89,21 @@ export default async function UniversityPage({ params }: PageProps) {
     })),
   }
 
+  const breadcrumb = breadcrumbJsonLd(locale, [
+    { name: 'Home', path: '/' },
+    { name: 'Universities', path: '/universities' },
+    { name: uni.shortName, path: `/universities/${uni.slug}` },
+  ])
+
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
       />
       {/* Header */}
       <div className="mb-8">
