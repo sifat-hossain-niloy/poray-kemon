@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { CACHE_KEYS, deleteCache } from '@/lib/redis'
+import { excludeReviewFromAggregate, isCountedInAggregate } from '@/lib/aggregation-mutations'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +40,8 @@ export async function POST(req: Request, ctx: RouteCtx) {
       reviewId: true,
       review: {
         select: {
+          moderationStatus: true,
+          status: true,
           professorCourse: { select: { professor: { select: { publicId: true } } } },
         },
       },
@@ -56,6 +59,12 @@ export async function POST(req: Request, ctx: RouteCtx) {
     })
 
     if (action === 'remove') {
+      // If the review was still counting toward the aggregate (e.g. resolve
+      // called on a report that hadn't tripped auto-hide yet), pull it out
+      // now — otherwise a "removed" review keeps polluting the score.
+      if (isCountedInAggregate(report.review.moderationStatus, report.review.status)) {
+        await excludeReviewFromAggregate(tx, report.reviewId)
+      }
       await tx.review.update({
         where: { id: report.reviewId },
         data: { status: 'deleted', moderationStatus: 'deleted' },
