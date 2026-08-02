@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { HelpfulButton } from '@/components/review/HelpfulButton'
 import { ReportButton } from '@/components/review/ReportButton'
+import { ShareButton } from '@/components/share/ShareButton'
 import { useLocale, useStrings } from '@/lib/i18n/client'
 
 // Display data for one review. Note: NO user fields exist — by design.
@@ -24,9 +25,12 @@ export interface ReviewCardData {
 interface Props {
   review: ReviewCardData
   userVoted?: boolean
+  // When provided, the share button links to the professor page with an
+  // anchor to this review so recipients scroll straight to it.
+  professorPublicId?: string
 }
 
-export function ReviewCard({ review, userVoted = false }: Props) {
+export function ReviewCard({ review, userVoted = false, professorPublicId }: Props) {
   const strings = useStrings()
   const locale = useLocale()
   const dateFormatter = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'bn-BD', {
@@ -47,8 +51,10 @@ export function ReviewCard({ review, userVoted = false }: Props) {
 
   const tagLabels = strings.tags as Record<string, string>
 
+  const sharePath = professorPublicId ? `/professors/${professorPublicId}#r-${review.id}` : null
+
   return (
-    <Card>
+    <Card id={`r-${review.id}`} className="scroll-mt-20">
       <CardContent className="space-y-3 py-4">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
           <StarsInline value={review.teachingQuality} label={strings.ratings.teachingQuality} />
@@ -81,6 +87,14 @@ export function ReviewCard({ review, userVoted = false }: Props) {
             {dateFormatter.format(review.submittedAt)}
           </time>
           <div className="flex items-center gap-3">
+            {sharePath ? (
+              <ShareButton
+                path={sharePath}
+                title={strings.share.shareReview}
+                text={review.reviewText ? review.reviewText.slice(0, 120) : undefined}
+                ariaLabel={strings.share.shareReview}
+              />
+            ) : null}
             <ReportButton reviewId={review.id} />
             <HelpfulButton
               reviewId={review.id}

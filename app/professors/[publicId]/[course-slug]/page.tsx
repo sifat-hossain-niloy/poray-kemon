@@ -247,6 +247,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
                   moderationStatus: r.moderationStatus,
                 }}
                 userVoted={votedIds.has(r.id)}
+                professorPublicId={publicId}
               />
             </li>
           ))}

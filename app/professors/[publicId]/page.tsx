@@ -11,6 +11,7 @@ import { obfuscateName } from '@/lib/name-obfuscation'
 import { isProfessorPublicId } from '@/lib/public-id'
 import { getLocale, getStrings } from '@/lib/i18n'
 import Link from 'next/link'
+import { ShareButton } from '@/components/share/ShareButton'
 
 // Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
@@ -135,12 +136,25 @@ export default async function ProfessorPage({ params }: PageProps) {
           </Link>
         </div>
 
-        <h1 className="text-3xl font-bold tracking-tight">
-          {professor.nameBn ?? obfuscateName(professor.nameEn)}
-        </h1>
-        {professor.nameBn ? (
-          <p className="mt-1 text-sm text-muted-foreground">{obfuscateName(professor.nameEn)}</p>
-        ) : null}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {professor.nameBn ?? obfuscateName(professor.nameEn)}
+            </h1>
+            {professor.nameBn ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {obfuscateName(professor.nameEn)}
+              </p>
+            ) : null}
+          </div>
+          <ShareButton
+            path={`/professors/${professor.publicId}`}
+            title={professor.nameBn ?? obfuscateName(professor.nameEn)}
+            text={strings.share.shareProfessor}
+            variant="labeled"
+            ariaLabel={strings.share.shareProfessor}
+          />
+        </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
           <Badge variant="secondary">{professor.university.shortName}</Badge>
@@ -257,6 +271,7 @@ export default async function ProfessorPage({ params }: PageProps) {
                             moderationStatus: r.moderationStatus,
                           }}
                           userVoted={votedIds.has(r.id)}
+                          professorPublicId={professor.publicId}
                         />
                       ))}
 
