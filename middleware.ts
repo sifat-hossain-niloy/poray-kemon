@@ -33,7 +33,14 @@ function isProtectedAdminPath(pathname: string): boolean {
   if (pathname === '/admin/login') return false
   if (pathname === '/moderator/login') return false
   if (pathname === '/api/admin/login') return false
-  return pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
+  return (
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/') ||
+    pathname === '/moderator' ||
+    pathname.startsWith('/moderator/') ||
+    pathname === '/api/admin' ||
+    pathname.startsWith('/api/admin/')
+  )
 }
 
 async function handleAdminAuth(req: NextRequest) {
@@ -61,12 +68,26 @@ export async function middleware(req: NextRequest) {
 
   const localeMatch = pathname.match(LOCALE_PATH_RE)
   if (localeMatch) {
-    // URL already has a locale prefix. Rewrite internally so the underlying
-    // route file (app/foo/...) serves the request while the browser URL
-    // stays /{locale}/foo. Set x-locale on BOTH the request (so RSC can read
-    // it via headers()) and the response headers.
     const locale = localeMatch[1] as string
     const rest = (localeMatch[2] as string | undefined) || '/'
+
+    // Security: URLs like /en/admin/... must NOT be internally rewritten and
+    // served — that would skip handleAdminAuth entirely and let a signed-in
+    // regular user reach the admin panel just by prefixing the path with a
+    // locale. Same for /en/api/admin/..., /en/moderator/..., and every
+    // other non-localized surface. Strip the locale and redirect so the
+    // request re-enters this middleware and takes the correct branch (admin
+    // auth for staff paths, pass-through for other non-localized paths).
+    if (isNonLocalized(rest)) {
+      const redirectUrl = req.nextUrl.clone()
+      redirectUrl.pathname = rest
+      return NextResponse.redirect(redirectUrl, 307)
+    }
+
+    // Legitimate locale-prefixed public URL. Rewrite internally so the
+    // underlying route file (app/foo/...) serves the request while the
+    // browser URL stays /{locale}/foo. Set x-locale on BOTH the request
+    // (so RSC can read it via headers()) and the response headers.
     const rewriteUrl = req.nextUrl.clone()
     rewriteUrl.pathname = rest
     const requestHeaders = new Headers(req.headers)
