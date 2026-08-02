@@ -141,6 +141,8 @@ new_avg = ((old_avg * old_count) + new_value) / (old_count + 1)
 
 Never run full `AVG()` scans.
 
+When a review transitions between counted (live/soft_flagged) and not-counted (flagged_hidden/deleted) states, the aggregate must be updated with the reverse formula so hidden or deleted reviews stop contributing. Helpers live in `lib/aggregation-mutations.ts` and must be called from every moderation code path (admin hide/delete/approve, report auto-hide, report resolve-remove).
+
 ---
 
 ## Anonymity Contract

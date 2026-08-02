@@ -24,6 +24,7 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { acquireOnce, deleteCache, redis, CACHE_KEYS } from '@/lib/redis'
 import { reportSchema } from '@/lib/validations/review'
+import { excludeReviewFromAggregate } from '@/lib/aggregation-mutations'
 import {
   AUTO_HIDE_THRESHOLD,
   shouldAutoHide,
@@ -103,6 +104,10 @@ export async function POST(req: Request) {
       if (!shouldAutoHide(pending)) return false
       if (review.moderationStatus === 'flagged_hidden') return false // already hidden
 
+      // Roll the review's contribution out of the aggregate before flipping
+      // its visibility, so a defamatory review's rating stops moving the
+      // professor's public score the moment it goes hidden.
+      await excludeReviewFromAggregate(tx, reviewId)
       await tx.review.update({
         where: { id: reviewId },
         data: { moderationStatus: 'flagged_hidden' },

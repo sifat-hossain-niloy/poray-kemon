@@ -12,6 +12,11 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { CACHE_KEYS, deleteCache } from '@/lib/redis'
+import {
+  excludeReviewFromAggregate,
+  includeReviewInAggregate,
+  isCountedInAggregate,
+} from '@/lib/aggregation-mutations'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +49,8 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     where: { id: reviewId },
     select: {
       professorCourseId: true,
+      moderationStatus: true,
+      status: true,
       professorCourse: { select: { professor: { select: { publicId: true } } } },
     },
   })
@@ -52,18 +59,38 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   const data: Parameters<typeof db.review.update>[0]['data'] = {
     moderationNotes: notes ?? undefined,
   }
+  let nextModerationStatus = review.moderationStatus
+  let nextStatus = review.status
   if (action === 'approve') {
     data.moderationStatus = 'live'
     data.moderationReason = null
     data.status = 'visible'
+    nextModerationStatus = 'live'
+    nextStatus = 'visible'
   } else if (action === 'hide') {
     data.moderationStatus = 'flagged_hidden'
+    nextModerationStatus = 'flagged_hidden'
   } else if (action === 'delete') {
     data.status = 'deleted'
     data.moderationStatus = 'deleted'
+    nextStatus = 'deleted'
+    nextModerationStatus = 'deleted'
   }
 
-  await db.review.update({ where: { id: reviewId }, data })
+  const wasCounted = isCountedInAggregate(review.moderationStatus, review.status)
+  const willBeCounted = isCountedInAggregate(nextModerationStatus, nextStatus)
+
+  // Apply the review update and aggregate delta in one transaction so a mid-
+  // write crash cannot leave the professor's public score out of sync with
+  // the review's visibility.
+  await db.$transaction(async (tx) => {
+    if (wasCounted && !willBeCounted) {
+      await excludeReviewFromAggregate(tx, reviewId)
+    } else if (!wasCounted && willBeCounted) {
+      await includeReviewInAggregate(tx, reviewId)
+    }
+    await tx.review.update({ where: { id: reviewId }, data })
+  })
 
   // Invalidate caches the public site reads
   await Promise.all([
