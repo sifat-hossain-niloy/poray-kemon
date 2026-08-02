@@ -57,7 +57,7 @@ async function handleAdminAuth(req: NextRequest) {
   return NextResponse.redirect(loginUrl)
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Admin/moderator auth first — locale routing does not apply to staff surfaces.
@@ -76,7 +76,7 @@ export async function middleware(req: NextRequest) {
     // regular user reach the admin panel just by prefixing the path with a
     // locale. Same for /en/api/admin/..., /en/moderator/..., and every
     // other non-localized surface. Strip the locale and redirect so the
-    // request re-enters this middleware and takes the correct branch (admin
+    // request re-enters this proxy and takes the correct branch (admin
     // auth for staff paths, pass-through for other non-localized paths).
     if (isNonLocalized(rest)) {
       const redirectUrl = req.nextUrl.clone()
