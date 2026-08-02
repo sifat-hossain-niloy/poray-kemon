@@ -93,10 +93,12 @@ export const CACHE_KEYS = {
   siteStats: 'stats:site',
   professorProfile: (slug: string) => `prof:${slug}`,
   searchResults: (queryHash: string) => `search:${queryHash}`,
+  topProfessors: 'leaderboard:top-professors',
 } as const
 
 export const CACHE_TTL = {
   siteStats: 60, // 1 minute
   professorProfile: 60, // 1 minute — new reviews appear within 1 min
   searchResults: 30, // 30 seconds
+  topProfessors: 300, // 5 minutes — leaderboard doesn't move that fast
 } as const
