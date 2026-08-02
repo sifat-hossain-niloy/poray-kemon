@@ -3,7 +3,7 @@ import { getCache, setCache, CACHE_KEYS, CACHE_TTL } from '@/lib/redis'
 import { getLocale, getStrings } from '@/lib/i18n'
 import { SearchBox } from '@/components/search/SearchBox'
 import { FirstVisitDisclaimer } from '@/components/homepage/FirstVisitDisclaimer'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 
 // ── Site stats fetched once per minute via Redis ──────────────────────────────
 

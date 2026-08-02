@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import type { Metadata } from 'next'
 import { search, type SearchResultKind } from '@/lib/search'
 import { getLocale, getStrings } from '@/lib/i18n'

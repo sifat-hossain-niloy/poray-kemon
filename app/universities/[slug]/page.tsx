@@ -1,7 +1,9 @@
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
+import { getLocale } from '@/lib/i18n'
+import { localeAlternates } from '@/lib/i18n/alternates'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -11,16 +13,35 @@ interface PageProps {
   params: Promise<{ slug: string }>
 }
 
+// Title/description tuned for long-tail search: "<uni-shortname> professor
+// reviews", "<full name> anonymous course reviews", etc. Numbers in the
+// description ("42 professors, 12 departments") give Google a signal that
+// the page has real, quantifiable content behind it.
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
   const uni = await db.university.findUnique({
     where: { slug },
-    select: { nameEn: true, nameBn: true, shortName: true },
+    select: {
+      nameEn: true,
+      nameBn: true,
+      shortName: true,
+      slug: true,
+      _count: { select: { departments: true, professors: true } },
+    },
   })
   if (!uni) return { title: 'Not found' }
+  const locale = await getLocale()
+  const alt = localeAlternates(`/universities/${uni.slug}`, locale)
+  const title = `${uni.shortName} (${uni.nameEn}) — professor reviews`
+  const description =
+    `Anonymous student reviews of professors and courses at ${uni.nameEn} (${uni.shortName}). ` +
+    `${uni._count.professors} professors across ${uni._count.departments} departments.`
   return {
-    title: `${uni.shortName} — ${uni.nameBn ?? uni.nameEn}`,
-    description: `${uni.nameEn} এর বিভাগসমূহ এবং শিক্ষকবৃন্দ`,
+    title,
+    description,
+    alternates: { canonical: alt.canonical, languages: alt.languages },
+    openGraph: { title, description, url: alt.canonical, type: 'website' },
+    twitter: { card: 'summary', title, description },
   }
 }
 
@@ -41,8 +62,37 @@ export default async function UniversityPage({ params }: PageProps) {
 
   if (!uni) notFound()
 
+  // JSON-LD for search-engine rich results. Marks the page as an educational
+  // organization with a nested list of departments, which Google can surface
+  // as a knowledge-panel snippet on branded queries.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollegeOrUniversity',
+    name: uni.nameEn,
+    alternateName: uni.shortName,
+    ...(uni.nameBn ? { additionalName: uni.nameBn } : {}),
+    ...(uni.locationCity
+      ? {
+          address: {
+            '@type': 'PostalAddress',
+            addressLocality: uni.locationCity,
+            addressCountry: 'BD',
+          },
+        }
+      : {}),
+    department: uni.departments.map((d) => ({
+      '@type': 'CollegeDepartment',
+      name: d.nameEn,
+      ...(d.shortName ? { alternateName: d.shortName } : {}),
+    })),
+  }
+
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Header */}
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-2 text-sm">

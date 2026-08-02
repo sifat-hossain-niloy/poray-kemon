@@ -6,7 +6,7 @@
 // `lib/i18n/shared` (pure helpers) on the client side instead.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE_NAME,
@@ -24,11 +24,18 @@ export {
   stringsFor,
 } from './shared'
 
-/** Server-only: read the locale cookie, returning the default if missing/invalid.
- *  Tolerates contexts where the cookies() store is unavailable (e.g. integration
- *  tests calling route handlers directly) by falling back to the default.
+/** Server-only: resolve the active locale. Preferred source is the `x-locale`
+ *  request header set by middleware when the URL is /{locale}/... For API
+ *  routes and other paths not seen by the locale middleware, fall back to
+ *  the pk_lang cookie, then the default. Tolerates test contexts where
+ *  headers()/cookies() are unavailable.
  */
 export async function getLocale(): Promise<Locale> {
+  try {
+    const h = await headers()
+    const fromHeader = h.get('x-locale')
+    if (isValidLocale(fromHeader)) return fromHeader
+  } catch {}
   try {
     const jar = await cookies()
     const raw = jar.get(LOCALE_COOKIE_NAME)?.value

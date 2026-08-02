@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { getLocale } from '@/lib/i18n'
 import { ABOUT_BN, ABOUT_EN } from '@/lib/i18n/about'
 import { Card, CardContent } from '@/components/ui/card'

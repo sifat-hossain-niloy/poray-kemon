@@ -1,28 +1,31 @@
 'use client'
 
 import { useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useLocale, useStrings } from '@/lib/i18n/client'
 import type { Locale } from '@/lib/i18n/shared'
 
+// Rewrites the current URL so `/en/foo` becomes `/bn/foo` (and vice versa).
+// Path-based locales mean each language has a distinct URL that Google can
+// index separately.
 export function LanguageToggle() {
   const locale = useLocale()
   const strings = useStrings()
-  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
 
-  async function setLocale(next: Locale) {
+  // Hard-navigate so the root layout re-runs on the server with the new
+  // locale — a soft router.push() would leave <html lang> and the locale
+  // context frozen at what the initial render produced.
+  function setLocale(next: Locale) {
     if (next === locale) return
-    try {
-      await fetch('/api/locale', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locale: next }),
-      })
-      startTransition(() => router.refresh())
-    } catch (err) {
-      console.error('locale toggle failed:', err)
-    }
+    const withoutLocale = pathname.replace(/^\/(en|bn)(?=\/|$)/, '') || '/'
+    const query = searchParams.toString()
+    const target = `/${next}${withoutLocale === '/' ? '' : withoutLocale}${query ? `?${query}` : ''}`
+    startTransition(() => {
+      window.location.assign(target)
+    })
   }
 
   const labelBn = strings.nav.languageBangla

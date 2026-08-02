@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { Button } from '@/components/ui/button'
 
 const STORAGE_KEY = 'pk_disclaimer_ack_v1'
