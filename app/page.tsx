@@ -3,6 +3,7 @@ import { getCache, setCache, CACHE_KEYS, CACHE_TTL } from '@/lib/redis'
 import { getLocale, getStrings } from '@/lib/i18n'
 import { SearchBox } from '@/components/search/SearchBox'
 import { FirstVisitDisclaimer } from '@/components/homepage/FirstVisitDisclaimer'
+import { TopProfessorsLeaderboard } from '@/components/homepage/TopProfessorsLeaderboard'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 
 // ── Site stats fetched once per minute via Redis ──────────────────────────────
@@ -106,6 +107,9 @@ export default async function HomePage() {
           </div>
         </div>
       </main>
+
+      {/* ── Top-rated professors leaderboard ──────────────────────────────── */}
+      <TopProfessorsLeaderboard />
 
       {/* ── Anonymity assurance ────────────────────────────────────────────── */}
       <section
