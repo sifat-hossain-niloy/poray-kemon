@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
       url: alt.canonical,
       type: 'website',
     },
-    twitter: { card: 'summary', title: content.title, description: content.intro },
+    twitter: { card: 'summary_large_image', title: content.title, description: content.intro },
   }
 }
 
