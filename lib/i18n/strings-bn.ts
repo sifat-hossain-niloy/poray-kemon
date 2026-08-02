@@ -75,6 +75,19 @@ export const BN = {
     userAlreadyReviewed: 'আপনি এই কোর্সে রিভিউ দিয়েছেন',
   },
 
+  // ── Share ─────────────────────────────────────────────────────────────────
+  share: {
+    label: 'শেয়ার',
+    facebook: 'ফেসবুক',
+    whatsapp: 'হোয়াটসঅ্যাপ',
+    messenger: 'মেসেঞ্জার',
+    twitter: 'X (টুইটার)',
+    copyLink: 'লিংক কপি করুন',
+    copied: 'কপি হয়েছে',
+    shareReview: 'এই রিভিউ শেয়ার করুন',
+    shareProfessor: 'এই শিক্ষককে শেয়ার করুন',
+  },
+
   // ── Professor profile ─────────────────────────────────────────────────────
   professor: {
     writeReview: 'রিভিউ লিখুন',

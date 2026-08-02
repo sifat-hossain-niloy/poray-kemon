@@ -77,6 +77,18 @@ export const EN: Strings = {
     userAlreadyReviewed: "You've reviewed this course",
   },
 
+  share: {
+    label: 'Share',
+    facebook: 'Facebook',
+    whatsapp: 'WhatsApp',
+    messenger: 'Messenger',
+    twitter: 'X (Twitter)',
+    copyLink: 'Copy link',
+    copied: 'Copied',
+    shareReview: 'Share this review',
+    shareProfessor: 'Share this professor',
+  },
+
   // ── Professor profile ─────────────────────────────────────────────────────
   professor: {
     writeReview: 'Write a review',
