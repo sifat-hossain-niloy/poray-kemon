@@ -19,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description: DESCRIPTION,
     alternates: { canonical: alt.canonical, languages: alt.languages },
     openGraph: { title: TITLE, description: DESCRIPTION, url: alt.canonical, type: 'website' },
-    twitter: { card: 'summary', title: TITLE, description: DESCRIPTION },
+    twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION },
   }
 }
 
