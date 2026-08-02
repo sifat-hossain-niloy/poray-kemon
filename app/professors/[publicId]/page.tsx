@@ -10,9 +10,9 @@ import { combineProfessorStats } from '@/lib/professor-stats'
 import { obfuscateName } from '@/lib/name-obfuscation'
 import { isProfessorPublicId } from '@/lib/public-id'
 import { getLocale, getStrings } from '@/lib/i18n'
-import Link from 'next/link'
 import { ShareButton } from '@/components/share/ShareButton'
 import { localeAlternates } from '@/lib/i18n/alternates'
+import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 
 // Dynamic: per-viewer vote state can't be cached.
@@ -161,8 +161,23 @@ export default async function ProfessorPage({ params }: PageProps) {
       : {}),
   }
 
+  const breadcrumb = breadcrumbJsonLd(locale, [
+    { name: 'Home', path: '/' },
+    { name: 'Universities', path: '/universities' },
+    { name: professor.university.shortName, path: `/universities/${professor.university.slug}` },
+    {
+      name: professor.department.shortName ?? professor.department.nameEn,
+      path: `/universities/${professor.university.slug}/departments/${professor.department.slug ?? ''}`,
+    },
+    { name: jsonLdName, path: `/professors/${professor.publicId}` },
+  ])
+
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

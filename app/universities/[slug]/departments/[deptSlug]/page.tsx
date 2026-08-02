@@ -8,6 +8,7 @@ import { combineProfessorStats } from '@/lib/professor-stats'
 import { obfuscateName } from '@/lib/name-obfuscation'
 import { getLocale, getStrings } from '@/lib/i18n'
 import { localeAlternates } from '@/lib/i18n/alternates'
+import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 
 export const revalidate = 300
 
@@ -98,6 +99,16 @@ export default async function DepartmentProfessorsPage({ params }: PageProps) {
       alternateName: dept.university.shortName,
     },
   }
+
+  const breadcrumb = breadcrumbJsonLd(locale, [
+    { name: 'Home', path: '/' },
+    { name: 'Universities', path: '/universities' },
+    { name: dept.university.shortName, path: `/universities/${dept.university.slug}` },
+    {
+      name: deptLabel,
+      path: `/universities/${dept.university.slug}/departments/${dept.slug ?? deptSlug}`,
+    },
+  ])
   const backLabel = locale === 'en' ? '← Departments' : '← বিভাগসমূহ'
   const headingProfessors = locale === 'en' ? 'Professors' : 'শিক্ষকবৃন্দ'
   const emptyLabel =
@@ -133,6 +144,10 @@ export default async function DepartmentProfessorsPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

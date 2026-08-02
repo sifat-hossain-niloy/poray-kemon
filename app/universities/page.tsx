@@ -2,17 +2,30 @@ import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
 import { getLocale, getStrings } from '@/lib/i18n'
+import { localeAlternates } from '@/lib/i18n/alternates'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://poraykemon.com'
+
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale()
+  const alt = localeAlternates('/universities', locale)
+  const count = await db.university.count()
+  const title =
+    locale === 'en'
+      ? `Universities in Bangladesh: professor reviews from students`
+      : `বাংলাদেশের বিশ্ববিদ্যালয়: শিক্ষার্থীদের শিক্ষক রিভিউ`
+  const description =
+    locale === 'en'
+      ? `Anonymous student reviews of professors and courses at ${count} Bangladeshi universities. Browse BUET, DU, NSU, BRAC, IUT, and every accredited institution in the country.`
+      : `বাংলাদেশের ${count} টি বিশ্ববিদ্যালয়ের শিক্ষকদের নিয়ে বেনামী রিভিউ। BUET, DU, NSU, BRAC, IUT সহ প্রতিটি স্বীকৃত প্রতিষ্ঠান।`
   return {
-    title: locale === 'en' ? 'Universities' : 'বিশ্ববিদ্যালয়',
-    description:
-      locale === 'en'
-        ? 'All universities in Bangladesh covered by Poray Kemon'
-        : 'বাংলাদেশের সব বিশ্ববিদ্যালয়ের তালিকা',
+    title,
+    description,
+    alternates: { canonical: alt.canonical, languages: alt.languages },
+    openGraph: { title, description, url: alt.canonical, type: 'website' },
+    twitter: { card: 'summary', title, description },
   }
 }
 
@@ -69,11 +82,34 @@ export default async function UniversitiesPage() {
     international: universities.filter((u) => u.type === 'international'),
   }
 
+  // ItemList JSON-LD tells Google this page is a curated catalog. Ordered
+  // by shortName so the position numbers are stable across crawls.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    itemListElement: universities.slice(0, 100).map((u, idx) => ({
+      '@type': 'ListItem',
+      position: idx + 1,
+      url: `${SITE_URL}/${locale}/universities/${u.slug}`,
+      name: `${u.shortName} — ${u.nameEn}`,
+    })),
+  }
+
+  const intro =
+    locale === 'en'
+      ? 'Browse anonymous student reviews of professors and courses at every accredited university in Bangladesh. Each professor page shows a weighted overall rating, per-course breakdowns for teaching quality, grading fairness, course difficulty, and attendance strictness, and unfiltered written feedback from students who took the class.'
+      : 'বাংলাদেশের প্রতিটি স্বীকৃত বিশ্ববিদ্যালয়ের শিক্ষক ও কোর্স নিয়ে বেনামী শিক্ষার্থী রিভিউ। প্রতিটি শিক্ষকের পেজে সামগ্রিক ওজনযুক্ত রেটিং, কোর্সভিত্তিক পড়ানোর মান, নম্বরের ন্যায্যতা, কোর্সের কঠিনত্ব ও উপস্থিতি বিষয়ে বিস্তারিত এবং ক্লাস নেওয়া শিক্ষার্থীদের অসম্পাদিত মতামত রয়েছে।'
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="mb-8 space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">{strings.nav.universities}</h1>
         <p className="text-muted-foreground">{header}</p>
+        <p className="max-w-3xl text-sm text-foreground/80 leading-relaxed">{intro}</p>
       </div>
 
       {(['public', 'private', 'international'] as const).map((type) => {
