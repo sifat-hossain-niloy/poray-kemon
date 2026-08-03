@@ -1,11 +1,13 @@
 import { ImageResponse } from 'next/og'
+import { BrandMark, OG_COLORS, OG_SIZE, loadBrandFonts } from '@/lib/og/branding'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 export const alt = 'Poray Kemon — anonymous professor reviews from Bangladesh students'
-export const size = { width: 1200, height: 630 }
+export const size = OG_SIZE
 export const contentType = 'image/png'
 
 export default async function Image() {
+  const fonts = await loadBrandFonts()
   return new ImageResponse(
     <div
       style={{
@@ -15,52 +17,36 @@ export default async function Image() {
         flexDirection: 'column',
         justifyContent: 'space-between',
         padding: '72px',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #0b1220 100%)',
-        color: '#f8fafc',
-        fontFamily: 'system-ui, sans-serif',
+        background: OG_COLORS.background,
+        color: OG_COLORS.foreground,
+        fontFamily: 'Hind Siliguri, sans-serif',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            background: 'linear-gradient(135deg, #6366f1, #22d3ee)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 32,
-            fontWeight: 800,
-            color: '#0b1220',
-          }}
-        >
-          PK
-        </div>
-        <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.01em' }}>Poray Kemon</div>
-      </div>
+      <BrandMark scale={1} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div
           style={{
-            fontSize: 72,
-            fontWeight: 800,
+            fontSize: 76,
+            fontWeight: 700,
             lineHeight: 1.05,
             letterSpacing: '-0.03em',
             maxWidth: 1000,
+            color: OG_COLORS.foreground,
           }}
         >
-          Anonymous professor reviews
+          পড়ায় কেমন
         </div>
         <div
           style={{
-            fontSize: 40,
-            color: '#94a3b8',
+            fontSize: 44,
             fontWeight: 500,
+            color: OG_COLORS.muted,
             maxWidth: 1000,
+            lineHeight: 1.2,
           }}
         >
-          Real ratings from Bangladeshi university students.
+          Anonymous professor and course reviews from Bangladeshi students.
         </div>
       </div>
 
@@ -69,14 +55,16 @@ export default async function Image() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          paddingTop: 24,
+          borderTop: `1px solid ${OG_COLORS.border}`,
           fontSize: 26,
-          color: '#cbd5e1',
+          color: OG_COLORS.muted,
         }}
       >
-        <div>BUET · DU · NSU · BRAC · IUT · and every accredited BD university</div>
-        <div style={{ color: '#22d3ee', fontWeight: 600 }}>poraykemon.com</div>
+        <div>BUET · DU · NSU · BRAC · IUT · every accredited BD university</div>
+        <div style={{ color: OG_COLORS.foreground, fontWeight: 700 }}>poraykemon.com</div>
       </div>
     </div>,
-    { ...size },
+    { ...size, fonts },
   )
 }
