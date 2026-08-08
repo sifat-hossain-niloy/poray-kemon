@@ -73,11 +73,10 @@ export function EligibilityGate({ universityId, onChange }: Props) {
   // Only render when the payload we have describes the currently-picked uni.
   // Guards against a flash of the previous university's banner while a
   // new fetch is in flight.
-  const shown =
-    payload && payload.forUniversityId === universityId && !payload.verdict.eligible
-      ? payload
-      : null
-  if (!shown) return null
+  if (!payload || payload.forUniversityId !== universityId) return null
+  const verdict = payload.verdict
+  if (verdict.eligible) return null
+  const shown = payload
 
   const t =
     locale === 'en'
@@ -96,9 +95,8 @@ export function EligibilityGate({ universityId, onChange }: Props) {
         }
 
   const required = shown.requiredSuffixes.map((s) => `@*.${s}`).join(' / ')
-  const heading = shown.verdict.reason === 'no-email' ? t.headingNoEmail : t.headingMismatch
-  const currentDomain =
-    shown.verdict.reason === 'domain-mismatch' ? shown.verdict.userDomain : shown.userDomain
+  const heading = verdict.reason === 'no-email' ? t.headingNoEmail : t.headingMismatch
+  const currentDomain = verdict.reason === 'domain-mismatch' ? verdict.userDomain : shown.userDomain
 
   return (
     <div
