@@ -126,9 +126,9 @@ async function resolveDepartment(input: {
       nameEn: parsed.nameEn,
       shortName,
       slug: candidateSlug,
-      // Anything created via the review form is unverified — surfaces in the
-      // admin merge tool so duplicates can be collapsed.
-      status: 'unverified',
+      // User-added departments are trusted — no admin verification gate.
+      // Duplicates can still be collapsed later via the admin merge tool.
+      status: 'verified',
     },
     select: { id: true, nameEn: true, shortName: true },
   })
