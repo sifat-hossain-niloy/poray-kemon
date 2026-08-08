@@ -135,7 +135,6 @@ export function CourseFields({
             onFocus={() => setCodeFocused(true)}
             onBlur={() => setTimeout(() => setCodeFocused(false), 120)}
             placeholder={labels.codePlaceholder}
-            disabled={departmentId === null}
             autoComplete="off"
             className={inputClass}
           />
@@ -159,7 +158,6 @@ export function CourseFields({
             onFocus={() => setNameFocused(true)}
             onBlur={() => setTimeout(() => setNameFocused(false), 120)}
             placeholder={labels.namePlaceholder}
-            disabled={departmentId === null}
             autoComplete="off"
             className={inputClass}
             required
