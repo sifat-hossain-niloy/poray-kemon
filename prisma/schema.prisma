@@ -105,6 +105,13 @@ model University {
   websiteUrl   String?        @map("website_url") @db.VarChar(255)
   createdAt    DateTime       @default(now()) @map("created_at")
 
+  // Email-domain gate for review authorship. Empty = no restriction, anyone
+  // signed in may review. Non-empty = the reviewer's verified email must end
+  // in one of these suffixes (case-insensitive, with an optional subdomain,
+  // e.g. "du.ac.bd" matches "cs.du.ac.bd" and "du.ac.bd" itself). The check
+  // is enforced server-side in POST /api/reviews; see lib/eligibility.ts.
+  emailDomainSuffixes String[] @default([]) @map("email_domain_suffixes")
+
   departments Department[]
   professors  Professor[]
 
@@ -254,17 +261,24 @@ model ReviewSubmission {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model User {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  googleId    String   @unique @map("google_id") @db.VarChar(255)
-  displayName String?  @map("display_name") @db.VarChar(100)
-  createdAt   DateTime @default(now()) @map("created_at")
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  googleId    String    @unique @map("google_id") @db.VarChar(255)
+  displayName String?   @map("display_name") @db.VarChar(100)
+  // Domain part of the Google OAuth email (everything after the '@',
+  // lower-cased). We deliberately do NOT store the full email address —
+  // the domain alone is what the university email-domain gate needs, and
+  // keeping just the suffix shrinks the PII footprint. See
+  // universities.email_domain_suffixes + lib/eligibility.ts. The reviews
+  // table has NO user_id column, so this can never be joined to a specific
+  // review — the anonymity contract is preserved.
+  emailDomain String?   @map("email_domain") @db.VarChar(253)
+  createdAt   DateTime  @default(now()) @map("created_at")
   lastActive  DateTime? @map("last_active")
 
-  reviewSubmissions   ReviewSubmission[]
-  helpfulVotes        HelpfulVote[]
-  universityRequests  UniversityRequest[]
+  reviewSubmissions  ReviewSubmission[]
+  helpfulVotes       HelpfulVote[]
+  universityRequests UniversityRequest[]
 
-  // No email column — intentional. Reduces PII footprint.
   @@map("users")
 }
 

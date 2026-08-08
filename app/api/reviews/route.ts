@@ -29,6 +29,7 @@ import { professorSlug, courseSlug, slugify } from '@/lib/slug'
 import { parseDepartmentName } from '@/lib/department-parser'
 import { deleteCache, CACHE_KEYS } from '@/lib/redis'
 import { getStrings } from '@/lib/i18n'
+import { checkEligibility, formatRequiredSuffixes } from '@/lib/eligibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -286,7 +287,50 @@ export async function POST(req: Request) {
     )
   }
 
-  // ── 4. Resolve department → professor → course → professor_course ────────
+  // ── 4. Per-university email-domain eligibility gate ──────────────────────
+  //
+  // Some universities restrict review authorship to students of that uni
+  // (verified by OAuth email domain). Enforced here before any writes so a
+  // rejected submission leaves no trace. The universityId is either sent
+  // directly (new-professor path) or looked up from the existing professor
+  // row (existing-professor path).
+  {
+    let gateUniversityId: number | undefined = data.university_id
+    if (!gateUniversityId && data.professor_id) {
+      const prof = await db.professor.findUnique({
+        where: { id: data.professor_id },
+        select: { universityId: true },
+      })
+      gateUniversityId = prof?.universityId
+    }
+    if (gateUniversityId) {
+      const [uni, user] = await Promise.all([
+        db.university.findUnique({
+          where: { id: gateUniversityId },
+          select: { shortName: true, emailDomainSuffixes: true },
+        }),
+        db.user.findUnique({ where: { id: userId }, select: { emailDomain: true } }),
+      ])
+      if (uni && uni.emailDomainSuffixes.length > 0) {
+        const verdict = checkEligibility(user?.emailDomain ?? null, uni.emailDomainSuffixes)
+        if (!verdict.eligible) {
+          return NextResponse.json(
+            {
+              error:
+                verdict.reason === 'no-email'
+                  ? `Reviews for ${uni.shortName} require a verified institutional email (${formatRequiredSuffixes(uni.emailDomainSuffixes)}). Sign in with your university Google account and try again.`
+                  : `Reviews for ${uni.shortName} are limited to students with a ${formatRequiredSuffixes(uni.emailDomainSuffixes)} email. Your account uses @${verdict.userDomain}.`,
+              code: 'EMAIL_DOMAIN_NOT_ELIGIBLE',
+              requiredSuffixes: verdict.requiredSuffixes,
+            },
+            { status: 403 },
+          )
+        }
+      }
+    }
+  }
+
+  // ── 5. Resolve department → professor → course → professor_course ────────
   //
   // We resolve the department first because the professor's row needs a
   // department_id. When `professor_id` is given the department is implied
