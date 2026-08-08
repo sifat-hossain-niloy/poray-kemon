@@ -497,8 +497,11 @@ const inputClass =
   'w-full rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  // overflow-visible on the outer Card so the absolutely-positioned
+  // typeahead / course-code / course-name dropdowns aren't clipped by the
+  // card's rounded border when they extend below the input row.
   return (
-    <Card>
+    <Card className="overflow-visible">
       <CardContent className="space-y-4 py-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
