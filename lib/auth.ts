@@ -3,6 +3,7 @@ import Google from 'next-auth/providers/google'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
 import { ADMIN_COOKIE_NAME } from '@/lib/admin-auth'
+import { emailToDomain as extractEmailDomain } from '@/lib/eligibility'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NextAuth v5 — Google OAuth only, JWT strategy, NO adapter.
@@ -45,14 +46,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       profile(profile) {
-        // We deliberately drop email and picture — reduces PII footprint.
-        // `id` here flows into the JWT user object but is NOT what we key on;
-        // we capture the Google `sub` from the `account` object in the
+        // We deliberately drop the full email + picture — reduces PII
+        // footprint. The email DOMAIN gets pulled off downstream and saved
+        // to users.email_domain to power the per-university eligibility
+        // gate (see lib/eligibility.ts). The address itself never touches
+        // our DB. `id` here flows into the JWT user object but is NOT what
+        // we key on; we capture the Google `sub` from `account` in the
         // signIn / jwt callbacks instead.
         return {
           id: profile.sub,
           name: profile.name as string,
-          email: '', // string (not undefined) — keeps Auth.js happy without storing it anywhere
+          email: (profile.email as string | undefined) ?? '',
           image: null,
         }
       },
@@ -73,15 +77,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       if (!googleSub) return false
 
+      // Pull the domain from the OAuth email. We only persist the suffix —
+      // the full address is discarded immediately after this callback.
+      const rawEmail =
+        (profile?.email as string | undefined) ?? (user?.email as string | undefined) ?? null
+      const emailDomain = extractEmailDomain(rawEmail)
+
       await db.user.upsert({
         where: { googleId: googleSub },
         create: {
           googleId: googleSub,
           displayName: user?.name ?? null,
+          emailDomain,
         },
         update: {
           lastActive: new Date(),
-          // Never update displayName after first login — reduces churn
+          // Refresh the domain on every sign-in so a student switching from
+          // a personal Gmail to their institutional account is picked up
+          // automatically. Never touches displayName — reduces churn.
+          emailDomain,
         },
       })
 

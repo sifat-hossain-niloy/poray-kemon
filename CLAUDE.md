@@ -22,7 +22,10 @@ These must never be violated:
 2. **`review_submissions` table is decoupled from `reviews`** — no JOIN can ever reveal who wrote what
 3. **Reading is fully public** — no login, no cookie, no tracking for read-only visitors
 4. **Google OAuth only** — no email/password, no other providers
-5. **No email stored** — only Google `sub` identifier (PDPO compliance)
+5. **No full email stored** — only the Google `sub` identifier, plus the
+   email **domain suffix** (e.g. `cs.du.ac.bd`) captured on sign-in to
+   power the per-university eligibility gate in `lib/eligibility.ts`. The
+   local part (`sifat` in `sifat@cs.du.ac.bd`) never touches the DB.
 6. **Bangladesh-only scope** — only BD universities
 
 ---

@@ -11,6 +11,7 @@ import { ProfessorTypeahead, type ProfessorSelection } from './ProfessorTypeahea
 import { DepartmentTypeahead, type DepartmentSelection } from './DepartmentTypeahead'
 import { CourseFields } from './CourseFields'
 import { UniversityTypeahead, type UniversitySelection } from './UniversityTypeahead'
+import { EligibilityGate } from './EligibilityGate'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -102,6 +103,9 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
   // Submission state
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Per-university email-domain gate — the server enforces it too, this is
+  // just for pre-submit feedback so the user knows before they type.
+  const [eligible, setEligible] = useState(true)
 
   const ratingState: Record<string, [number, (v: number) => void]> = {
     teaching_quality: [teachingQuality, setTeachingQuality],
@@ -259,6 +263,18 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
           <Badge variant="secondary">{strings.review.anonymityNote}</Badge>
         </CardContent>
       </Card>
+
+      {/* ── Eligibility gate (per-university email-domain rule) ───────────── */}
+      {isAuthenticated ? (
+        <EligibilityGate
+          universityId={
+            preselectedProfessor
+              ? preselectedProfessor.universityId
+              : (universitySelection?.id ?? null)
+          }
+          onChange={setEligible}
+        />
+      ) : null}
 
       {/* ── Professor + course ────────────────────────────────────────────── */}
       <Section title={t.sectionProf}>
@@ -468,7 +484,7 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
         </div>
       ) : null}
 
-      <Button type="submit" size="lg" disabled={submitting} className="w-full">
+      <Button type="submit" size="lg" disabled={submitting || !eligible} className="w-full">
         {submitting ? t.submitting : strings.review.submitButton}
       </Button>
     </form>
