@@ -131,6 +131,8 @@ Browser                     Next.js                  Google OAuth
 
 Session is stored in Redis (via NextAuth adapter). The session object contains only `{ userId, displayName }` — no email, no Google tokens after exchange.
 
+The Google profile's email address is read once inside the `signIn` callback, split at the `@`, and only the **domain suffix** is written to `users.email_domain` (see [ADR-009](adrs/ADR-009-per-university-email-gate.md)). The full address never touches the DB and is not carried into the session.
+
 ---
 
 ## 4. Review Submission Flow (Critical Path)
@@ -146,6 +148,11 @@ Client                      Server (API Route)              Database
   │                               │ 4. Run moderation check
   │                               │    ├─ hard block → 400
   │                               │    └─ soft flag → mark for queue
+  │                               │ 4b. Per-university eligibility gate
+  │                               │    ├─ lookup universities.email_domain_suffixes
+  │                               │    ├─ if empty: allow (no restriction)
+  │                               │    └─ else compare users.email_domain
+  │                               │       └─ mismatch → 403 EMAIL_DOMAIN_NOT_ELIGIBLE
   │                               │ 5. Find/create Course record
   │                               │ 6. Find/create ProfessorCourse record
   │                               │ 7. BEGIN TRANSACTION ─────────►│

@@ -36,17 +36,18 @@ admin_users (separate auth system)
 
 ### `universities`
 
-| Column          | Type           | Constraints      | Notes                                |
-| --------------- | -------------- | ---------------- | ------------------------------------ |
-| `id`            | `SERIAL`       | PK               |                                      |
-| `name_en`       | `VARCHAR(200)` | NOT NULL, UNIQUE | "North South University"             |
-| `name_bn`       | `VARCHAR(200)` |                  | "নর্থ সাউথ ইউনিভার্সিটি"             |
-| `short_name`    | `VARCHAR(20)`  | NOT NULL, UNIQUE | "NSU"                                |
-| `slug`          | `VARCHAR(50)`  | NOT NULL, UNIQUE | "nsu" — for URL routing              |
-| `location_city` | `VARCHAR(100)` |                  | "Dhaka"                              |
-| `type`          | `ENUM`         |                  | `public`, `private`, `international` |
-| `website_url`   | `VARCHAR(255)` |                  |                                      |
-| `created_at`    | `TIMESTAMP`    | DEFAULT NOW()    |                                      |
+| Column                  | Type           | Constraints              | Notes                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------- | -------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                    | `SERIAL`       | PK                       |                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `name_en`               | `VARCHAR(200)` | NOT NULL, UNIQUE         | "North South University"                                                                                                                                                                                                                                                                                                                                                                        |
+| `name_bn`               | `VARCHAR(200)` |                          | "নর্থ সাউথ ইউনিভার্সিটি"                                                                                                                                                                                                                                                                                                                                                                        |
+| `short_name`            | `VARCHAR(20)`  | NOT NULL, UNIQUE         | "NSU"                                                                                                                                                                                                                                                                                                                                                                                           |
+| `slug`                  | `VARCHAR(50)`  | NOT NULL, UNIQUE         | "nsu" — for URL routing                                                                                                                                                                                                                                                                                                                                                                         |
+| `location_city`         | `VARCHAR(100)` |                          | "Dhaka"                                                                                                                                                                                                                                                                                                                                                                                         |
+| `type`                  | `ENUM`         |                          | `public`, `private`, `international`                                                                                                                                                                                                                                                                                                                                                            |
+| `website_url`           | `VARCHAR(255)` |                          |                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `created_at`            | `TIMESTAMP`    | DEFAULT NOW()            |                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `email_domain_suffixes` | `TEXT[]`       | NOT NULL, DEFAULT `'{}'` | Per-university review eligibility gate. Empty = no restriction; anyone signed in may review. Non-empty = the reviewer's `users.email_domain` must match one of these suffixes. Matching is case-insensitive with a dot boundary: `du.ac.bd` accepts `du.ac.bd` and `cs.du.ac.bd` but rejects `evildu.ac.bd`. See `lib/eligibility.ts` and [ADR-009](adrs/ADR-009-per-university-email-gate.md). |
 
 **Indexes:** `slug` (unique), `short_name` (unique)
 
@@ -54,16 +55,16 @@ admin_users (separate auth system)
 
 ### `departments`
 
-| Column          | Type           | Constraints          | Notes                                                                                                         |
-| --------------- | -------------- | -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `id`            | `SERIAL`       | PK                   |                                                                                                               |
-| `university_id` | `INTEGER`      | FK → universities    |                                                                                                               |
-| `name_en`       | `VARCHAR(200)` | NOT NULL             | "Computer Science & Engineering"                                                                              |
-| `name_bn`       | `VARCHAR(200)` |                      |                                                                                                               |
-| `short_name`    | `VARCHAR(20)`  |                      | "CSE"                                                                                                         |
-| `slug`          | `VARCHAR(50)`  |                      | "cse"                                                                                                         |
-| `status`        | `ENUM`         | DEFAULT 'unverified' | `verified \| unverified`. Seed-curated rows are verified. Anything created via the review form is unverified. |
-| `created_at`    | `TIMESTAMP`    | DEFAULT NOW()        |                                                                                                               |
+| Column          | Type           | Constraints          | Notes                                                                                                                                                                                                                                                                                                     |
+| --------------- | -------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | `SERIAL`       | PK                   |                                                                                                                                                                                                                                                                                                           |
+| `university_id` | `INTEGER`      | FK → universities    |                                                                                                                                                                                                                                                                                                           |
+| `name_en`       | `VARCHAR(200)` | NOT NULL             | "Computer Science & Engineering"                                                                                                                                                                                                                                                                          |
+| `name_bn`       | `VARCHAR(200)` |                      |                                                                                                                                                                                                                                                                                                           |
+| `short_name`    | `VARCHAR(20)`  |                      | "CSE"                                                                                                                                                                                                                                                                                                     |
+| `slug`          | `VARCHAR(50)`  |                      | "cse"                                                                                                                                                                                                                                                                                                     |
+| `status`        | `ENUM`         | DEFAULT 'unverified' | `verified \| unverified`. Seed-curated rows are verified. As of 2026-08-08 user-added rows via the review form are also stored as `verified` — students filling in a missing department is a normal flow, not a moderation concern. The status column is retained for legacy rows and future admin needs. |
+| `created_at`    | `TIMESTAMP`    | DEFAULT NOW()        |                                                                                                                                                                                                                                                                                                           |
 
 **Unique constraint:** `(university_id, short_name)`, `(university_id, slug)`
 
@@ -211,15 +212,16 @@ Introduced by migration `20260710_add_university_requests`. Per-user rate limit 
 
 ### `users`
 
-| Column         | Type           | Constraints                   | Notes                            |
-| -------------- | -------------- | ----------------------------- | -------------------------------- |
-| `id`           | `UUID`         | PK, DEFAULT gen_random_uuid() |                                  |
-| `google_id`    | `VARCHAR(255)` | UNIQUE, NOT NULL              | Google OAuth `sub` field         |
-| `display_name` | `VARCHAR(100)` |                               | From Google profile, for UI only |
-| `created_at`   | `TIMESTAMP`    | DEFAULT NOW()                 |                                  |
-| `last_active`  | `TIMESTAMP`    |                               | Updated on login                 |
+| Column         | Type           | Constraints                   | Notes                                                                                                                                                                                                                                                                          |
+| -------------- | -------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`           | `UUID`         | PK, DEFAULT gen_random_uuid() |                                                                                                                                                                                                                                                                                |
+| `google_id`    | `VARCHAR(255)` | UNIQUE, NOT NULL              | Google OAuth `sub` field                                                                                                                                                                                                                                                       |
+| `display_name` | `VARCHAR(100)` |                               | From Google profile, for UI only                                                                                                                                                                                                                                               |
+| `email_domain` | `VARCHAR(253)` |                               | Domain part of the OAuth email only (e.g. `cs.du.ac.bd`). Captured on every sign-in via `lib/auth.ts`. Used by the per-university eligibility gate; see [ADR-009](adrs/ADR-009-per-university-email-gate.md). The local part (`sifat` in `sifat@cs.du.ac.bd`) is never stored. |
+| `created_at`   | `TIMESTAMP`    | DEFAULT NOW()                 |                                                                                                                                                                                                                                                                                |
+| `last_active`  | `TIMESTAMP`    |                               | Updated on login                                                                                                                                                                                                                                                               |
 
-**Intentionally no `email` column** — reduces PII footprint. Google `sub` is sufficient for identity.
+**No full email column** — only the domain suffix, and only for the per-university eligibility gate. The Google `sub` is the identity key.
 
 ---
 
