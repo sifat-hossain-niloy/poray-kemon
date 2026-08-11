@@ -1,10 +1,9 @@
-import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
-import { getLocale, getStrings } from '@/lib/i18n'
+import { auth } from '@/lib/auth'
+import { getLocale } from '@/lib/i18n'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { obfuscateName } from '@/lib/name-obfuscation'
+import { ReviewCard, type ReviewCardData } from '@/components/review/ReviewCard'
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale()
@@ -36,14 +35,25 @@ async function getRecentReviews() {
       id: true,
       teachingQuality: true,
       gradingFairness: true,
+      courseDifficulty: true,
+      attendanceStrictness: true,
       wouldRecommend: true,
       reviewText: true,
       tags: true,
       helpfulCount: true,
       submittedAt: true,
+      moderationStatus: true,
       professorCourse: {
         select: {
-          professor: { select: { publicId: true, nameEn: true } },
+          professor: {
+            select: {
+              publicId: true,
+              nameEn: true,
+              nameBn: true,
+              university: { select: { shortName: true, slug: true } },
+              department: { select: { shortName: true, nameEn: true, slug: true } },
+            },
+          },
           course: { select: { courseCode: true, courseName: true } },
         },
       },
@@ -52,17 +62,19 @@ async function getRecentReviews() {
 }
 
 export default async function RecentReviewsPage() {
-  const [reviews, strings, locale] = await Promise.all([
-    getRecentReviews(),
-    getStrings(),
-    getLocale(),
-  ])
-  const dateFormatter = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'bn-BD', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-  const tagLabels = strings.tags as Record<string, string>
+  const [reviews, locale, session] = await Promise.all([getRecentReviews(), getLocale(), auth()])
+  const viewerId = session?.user?.id ?? null
+
+  // Fetch viewer's helpful votes for every review on the page in one query
+  // so each ReviewCard renders with the right toggle state.
+  const votedIds = new Set<number>()
+  if (viewerId && reviews.length > 0) {
+    const votes = await db.helpfulVote.findMany({
+      where: { userId: viewerId, reviewId: { in: reviews.map((r) => r.id) } },
+      select: { reviewId: true },
+    })
+    votes.forEach((v) => votedIds.add(v.reviewId))
+  }
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
@@ -88,79 +100,40 @@ export default async function RecentReviewsPage() {
       ) : (
         <ul className="space-y-3">
           {reviews.map((r) => {
-            const courseLabel = r.professorCourse.course.courseCode
-              ? `${r.professorCourse.course.courseCode} · ${r.professorCourse.course.courseName}`
-              : r.professorCourse.course.courseName
+            const cardData: ReviewCardData = {
+              id: r.id,
+              teachingQuality: r.teachingQuality,
+              gradingFairness: r.gradingFairness,
+              courseDifficulty: r.courseDifficulty,
+              attendanceStrictness: r.attendanceStrictness,
+              wouldRecommend: r.wouldRecommend,
+              reviewText: r.reviewText,
+              tags: r.tags,
+              helpfulCount: r.helpfulCount,
+              submittedAt: r.submittedAt,
+              moderationStatus: r.moderationStatus,
+            }
             return (
               <li key={r.id}>
-                <Card>
-                  <CardContent className="space-y-3 py-4">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                      <Link
-                        href={`/professors/${r.professorCourse.professor.publicId}`}
-                        className="font-semibold hover:underline"
-                      >
-                        {obfuscateName(r.professorCourse.professor.nameEn)}
-                      </Link>
-                      <span className="text-xs text-muted-foreground">{courseLabel}</span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
-                      <RatingRow
-                        value={r.teachingQuality}
-                        label={strings.ratings.teachingQuality}
-                      />
-                      <RatingRow
-                        value={r.gradingFairness}
-                        label={strings.ratings.gradingFairness}
-                      />
-                      <Badge variant={r.wouldRecommend ? 'default' : 'outline'} className="ml-auto">
-                        {r.wouldRecommend
-                          ? strings.reviewDisplay.wouldRecommend
-                          : strings.reviewDisplay.wouldNotRecommend}
-                      </Badge>
-                    </div>
-
-                    {r.reviewText ? (
-                      <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                        {r.reviewText}
-                      </p>
-                    ) : null}
-
-                    {r.tags.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {r.tags.map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-[10px]">
-                            {tagLabels[tag] ?? tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    <div className="text-xs text-muted-foreground">
-                      <time dateTime={r.submittedAt.toISOString()}>
-                        {dateFormatter.format(r.submittedAt)}
-                      </time>
-                    </div>
-                  </CardContent>
-                </Card>
+                <ReviewCard
+                  review={cardData}
+                  userVoted={votedIds.has(r.id)}
+                  context={{
+                    professor: {
+                      publicId: r.professorCourse.professor.publicId,
+                      nameEn: r.professorCourse.professor.nameEn,
+                      nameBn: r.professorCourse.professor.nameBn,
+                    },
+                    university: r.professorCourse.professor.university,
+                    department: r.professorCourse.professor.department,
+                    course: r.professorCourse.course,
+                  }}
+                />
               </li>
             )
           })}
         </ul>
       )}
     </main>
-  )
-}
-
-function RatingRow({ value, label }: { value: number; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="text-muted-foreground">{label}:</span>
-      <span aria-label={`${label} ${value} out of 5`}>
-        <span className="text-yellow-500">{'★'.repeat(value)}</span>
-        <span className="text-muted-foreground/40">{'★'.repeat(5 - value)}</span>
-      </span>
-    </span>
   )
 }

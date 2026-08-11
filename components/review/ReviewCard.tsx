@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge'
 import { HelpfulButton } from '@/components/review/HelpfulButton'
 import { ReportButton } from '@/components/review/ReportButton'
 import { ShareButton } from '@/components/share/ShareButton'
+import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
+import { obfuscateName } from '@/lib/name-obfuscation'
 import { useLocale, useStrings } from '@/lib/i18n/client'
 
 // Display data for one review. Note: NO user fields exist — by design.
@@ -22,15 +24,27 @@ export interface ReviewCardData {
   moderationStatus: 'live' | 'soft_flagged' | 'flagged_hidden' | 'deleted'
 }
 
+// Context around a review. Everything optional so the professor page (which
+// already displays uni/dept/professor in its own header) can keep passing
+// bare cards, while the /reviews feed can pass the full lineage and get a
+// self-contained card back.
+export interface ReviewCardContext {
+  professor?: { publicId: string; nameEn: string; nameBn?: string | null }
+  university?: { shortName: string; slug: string }
+  department?: { shortName: string | null; nameEn: string; slug: string | null }
+  course?: { courseCode: string | null; courseName: string }
+}
+
 interface Props {
   review: ReviewCardData
   userVoted?: boolean
-  // When provided, the share button links to the professor page with an
-  // anchor to this review so recipients scroll straight to it.
+  /** Deprecated shorthand — prefer `context.professor.publicId`. Kept so
+   *  existing callers on the professor page compile. */
   professorPublicId?: string
+  context?: ReviewCardContext
 }
 
-export function ReviewCard({ review, userVoted = false, professorPublicId }: Props) {
+export function ReviewCard({ review, userVoted = false, professorPublicId, context }: Props) {
   const strings = useStrings()
   const locale = useLocale()
   const dateFormatter = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'bn-BD', {
@@ -51,11 +65,59 @@ export function ReviewCard({ review, userVoted = false, professorPublicId }: Pro
 
   const tagLabels = strings.tags as Record<string, string>
 
-  const sharePath = professorPublicId ? `/professors/${professorPublicId}#r-${review.id}` : null
+  const effectiveProfessorPublicId = context?.professor?.publicId ?? professorPublicId ?? null
+  const sharePath = effectiveProfessorPublicId
+    ? `/professors/${effectiveProfessorPublicId}#r-${review.id}`
+    : null
+
+  const showLineage = context && (context.professor || context.university || context.department)
 
   return (
     <Card id={`r-${review.id}`} className="scroll-mt-20">
       <CardContent className="space-y-3 py-4">
+        {/* ── Lineage row (only rendered when context is passed) ─────────── */}
+        {showLineage ? (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+            {context?.professor ? (
+              <Link
+                href={`/professors/${context.professor.publicId}`}
+                className="font-semibold hover:underline"
+              >
+                {context.professor.nameBn ?? obfuscateName(context.professor.nameEn)}
+              </Link>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {context?.university ? (
+                <Link href={`/universities/${context.university.slug}`}>
+                  <Badge variant="secondary" className="hover:bg-secondary/80">
+                    {context.university.shortName}
+                  </Badge>
+                </Link>
+              ) : null}
+              {context?.department && context.department.slug && context.university ? (
+                <Link
+                  href={`/universities/${context.university.slug}/departments/${context.department.slug}`}
+                >
+                  <Badge variant="outline" className="hover:bg-muted">
+                    {context.department.shortName ?? context.department.nameEn}
+                  </Badge>
+                </Link>
+              ) : context?.department ? (
+                <Badge variant="outline">
+                  {context.department.shortName ?? context.department.nameEn}
+                </Badge>
+              ) : null}
+              {context?.course ? (
+                <span className="text-xs text-muted-foreground">
+                  {context.course.courseCode
+                    ? `${context.course.courseCode} · ${context.course.courseName}`
+                    : context.course.courseName}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
           <StarsInline value={review.teachingQuality} label={strings.ratings.teachingQuality} />
           <StarsInline value={review.gradingFairness} label={strings.ratings.gradingFairness} />
