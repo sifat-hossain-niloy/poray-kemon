@@ -1,10 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { auth } from '@/lib/auth'
 import { semesterLabel } from '@/lib/semester'
-import { loadSemesterTrend } from '@/lib/semester-trend'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,12 +15,12 @@ import { ShareButton } from '@/components/share/ShareButton'
 import { localeAlternates } from '@/lib/i18n/alternates'
 import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
+import { topTags } from '@/lib/review-insights'
 import {
-  COUNTED_MODERATION_STATES,
-  ratingDistribution,
-  topTags,
-  type TagCount,
-} from '@/lib/review-insights'
+  getProfessorForPage,
+  loadProfessorExtras,
+  REVIEWS_PER_COURSE_PREVIEW,
+} from '@/lib/professor-page'
 
 // Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
@@ -31,20 +29,14 @@ interface PageProps {
   params: Promise<{ publicId: string }>
 }
 
-const REVIEWS_PER_COURSE_PREVIEW = 3
 const TOP_TAGS_PROFESSOR = 6
 const TOP_TAGS_COURSE = 3
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { publicId } = await params
-  const prof = await db.professor.findUnique({
-    where: isProfessorPublicId(publicId) ? { publicId } : { slug: publicId },
-    include: {
-      university: { select: { shortName: true, nameEn: true } },
-      department: { select: { shortName: true, nameEn: true } },
-      _count: { select: { professorCourses: true } },
-    },
-  })
+  // Legacy slugs redirect in the page body; only the opaque id needs metadata.
+  // Same cached call as the page, so this costs no extra query.
+  const prof = isProfessorPublicId(publicId) ? await getProfessorForPage(publicId) : null
   if (!prof) return { title: 'Not found' }
   // Title + description are indexed by search engines — the English name is
   // obfuscated by contract (see lib/name-obfuscation.ts). Bangla name is
@@ -87,8 +79,6 @@ export default async function ProfessorPage({ params }: PageProps) {
       ? `See all ${n.toLocaleString(numberLocale)} reviews →`
       : `সব ${n.toLocaleString(numberLocale)} রিভিউ দেখুন →`
   const { publicId } = await params
-  const session = await auth()
-  const viewerId = session?.user?.id ?? null
 
   // Legacy slug URLs (indexed by search engines, stored in old share
   // links) still resolve — we 301 to the opaque URL so bookmarks survive.
@@ -101,26 +91,10 @@ export default async function ProfessorPage({ params }: PageProps) {
     redirect(`/professors/${legacy.publicId}`)
   }
 
-  const professor = await db.professor.findUnique({
-    where: { publicId },
-    include: {
-      university: true,
-      department: true,
-      professorCourses: {
-        orderBy: { reviewCount: 'desc' },
-        include: {
-          course: true,
-          reviews: {
-            where: { status: 'visible' },
-            orderBy: [{ helpfulCount: 'desc' }, { submittedAt: 'desc' }],
-            take: REVIEWS_PER_COURSE_PREVIEW,
-          },
-        },
-      },
-    },
-  })
-
+  // Wave 1: session and professor are independent — fetch together.
+  const [session, professor] = await Promise.all([auth(), getProfessorForPage(publicId)])
   if (!professor) notFound()
+  const viewerId = session?.user?.id ?? null
 
   // Combined weighted score across all courses
   const combined = combineProfessorStats(
@@ -137,73 +111,21 @@ export default async function ProfessorPage({ params }: PageProps) {
     })),
   )
 
-  // Everything below is keyed by professor_course id, so collect them once
-  // and fan out the per-page queries in parallel.
-  const pcIds = professor.professorCourses.map((pc) => pc.id)
-  const allReviewIds = professor.professorCourses.flatMap((pc) => pc.reviews.map((r) => r.id))
-  const countedWhere = {
-    professorCourseId: { in: pcIds },
-    status: 'visible' as const,
-    moderationStatus: { in: [...COUNTED_MODERATION_STATES] },
-  }
-  const [votes, mySubmissions, tagRows, teachingBuckets] = await Promise.all([
-    viewerId && allReviewIds.length > 0
-      ? db.helpfulVote.findMany({
-          where: { userId: viewerId, reviewId: { in: allReviewIds } },
-          select: { reviewId: true },
-        })
-      : [],
-    // FR-AUTH-05: a signed-in viewer sees which of these courses they've
-    // reviewed. review_submissions holds only (user, professor_course), so
-    // this never touches review content.
-    viewerId && pcIds.length > 0
-      ? db.reviewSubmission.findMany({
-          where: { userId: viewerId, professorCourseId: { in: pcIds } },
-          select: { professorCourseId: true },
-        })
-      : [],
-    pcIds.length > 0
-      ? db.$queryRaw<Array<{ pc_id: number; tag: string; count: number }>>`
-          SELECT r.professor_course_id AS pc_id, t.tag, COUNT(*)::int AS count
-          FROM reviews r, unnest(r.tags) AS t(tag)
-          WHERE r.professor_course_id IN (${Prisma.join(pcIds)})
-            AND r.status = 'visible'
-            AND r.moderation_status IN ('live', 'soft_flagged')
-          GROUP BY 1, 2
-        `
-      : [],
-    pcIds.length > 0
-      ? db.review.groupBy({
-          by: ['teachingQuality'],
-          where: countedWhere,
-          _count: { _all: true },
-        })
-      : [],
-  ])
-  const votedIds = new Set(votes.map((v) => v.reviewId))
-  const reviewedPcIds = new Set(mySubmissions.map((s) => s.professorCourseId))
-
+  // Wave 2: everything else the page shows, in parallel.
+  const extras = await loadProfessorExtras({
+    professorCourseIds: professor.professorCourses.map((pc) => pc.id),
+    previewReviewIds: professor.professorCourses.flatMap((pc) => pc.reviews.map((r) => r.id)),
+    viewerId,
+  })
+  const votedIds = extras.votedReviewIds
+  const reviewedPcIds = extras.reviewedCourseIds
+  const tagsByPc = extras.tagsByCourse
+  const distribution = extras.distribution
+  const trend = extras.trend
   const knownTags = new Set(Object.keys(strings.tags))
   const tagLabels = strings.tags as Record<string, string>
-  const tagsByPc = new Map<number, TagCount[]>()
-  const professorTagTotals = new Map<string, number>()
-  for (const row of tagRows) {
-    const bucket = tagsByPc.get(row.pc_id) ?? []
-    bucket.push({ tag: row.tag, count: row.count })
-    tagsByPc.set(row.pc_id, bucket)
-    professorTagTotals.set(row.tag, (professorTagTotals.get(row.tag) ?? 0) + row.count)
-  }
-  const professorTopTags = topTags(
-    [...professorTagTotals].map(([tag, count]) => ({ tag, count })),
-    TOP_TAGS_PROFESSOR,
-    knownTags,
-  )
-  const distribution = ratingDistribution(
-    teachingBuckets.map((b) => ({ value: b.teachingQuality, count: b._count._all })),
-  )
+  const professorTopTags = topTags(extras.professorTags, TOP_TAGS_PROFESSOR, knownTags)
 
-  // Semester trend (SRS Phase 2).
-  const trend = await loadSemesterTrend(professor.professorCourses.map((pc) => pc.id))
   const trendCopy = {
     heading: locale === 'en' ? 'Teaching quality over time' : 'সময়ের সাথে পড়ানোর মান',
     sub:
