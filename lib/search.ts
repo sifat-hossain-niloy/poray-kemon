@@ -6,9 +6,11 @@
 //   - ILIKE for substring matching
 //   - ranked SELECTs with UNION ALL
 //
-// Anonymity note: search never touches reviews/review_submissions, so no risk.
+// Anonymity note: search never touches review_submissions. Professor hits
+// are enriched with public aggregates (score, count, tags) only.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { obfuscateName } from '@/lib/name-obfuscation'
 
@@ -22,7 +24,18 @@ export interface SearchResult {
   subtitle: string // e.g. "BUET · CSE" or "প্রকৌশল বিশ্ববিদ্যালয়"
   href: string
   score: number
+  /** Professors only (SRS §4.4 FR-SEARCH-02). */
+  stats?: ProfessorSearchStats
 }
+
+export interface ProfessorSearchStats {
+  overallScore: number | null
+  reviewCount: number
+  /** Up to two most-used tag keys across counted reviews. */
+  topTags: string[]
+}
+
+export const SEARCH_TOP_TAGS = 2
 
 interface RawRow {
   kind: SearchResultKind
@@ -99,7 +112,7 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
            -- name-based slug (defamation safety — see lib/public-id.ts).
            p.public_id AS slug,
            p.name_en AS title,
-           CONCAT(u.short_name, ' · ', d.short_name) AS subtitle,
+           CONCAT(u.short_name, ' · ', COALESCE(d.short_name, d.name_en)) AS subtitle,
            GREATEST(
              similarity(p.name_en, ${q}),
              COALESCE(similarity(p.name_bn, ${q}), 0)
@@ -114,6 +127,9 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
     ORDER BY score DESC
     LIMIT ${limit}
   `
+
+  const professorIds = rows.filter((r) => r.kind === 'professor').map((r) => r.id)
+  const stats = await professorSearchStats(professorIds)
 
   return rows.map((r) => ({
     kind: r.kind,
@@ -131,5 +147,59 @@ export async function search(query: string, limit = 20): Promise<SearchResult[]>
         : r.kind === 'department'
           ? `/universities/${r.slug}` // already "uni-slug/dept-slug"
           : `/professors/${r.slug}`,
+    ...(r.kind === 'professor'
+      ? { stats: stats.get(r.id) ?? { overallScore: null, reviewCount: 0, topTags: [] } }
+      : {}),
   }))
+}
+
+/** Score, review count and top tags for a page of professor hits — two
+ *  queries regardless of how many professors matched. */
+export async function professorSearchStats(
+  professorIds: number[],
+): Promise<Map<number, ProfessorSearchStats>> {
+  const out = new Map<number, ProfessorSearchStats>()
+  if (professorIds.length === 0) return out
+  const ids = Prisma.join(professorIds)
+
+  const [aggregates, tags] = await Promise.all([
+    db.$queryRaw<Array<{ professor_id: number; review_count: number; overall: string | null }>>`
+      SELECT professor_id,
+             SUM(review_count)::int AS review_count,
+             (SUM(overall_score * review_count) / NULLIF(SUM(review_count), 0))::text AS overall
+        FROM professor_courses
+       WHERE professor_id IN (${ids}) AND review_count > 0
+       GROUP BY professor_id
+    `,
+    db.$queryRaw<Array<{ professor_id: number; tag: string }>>`
+      SELECT professor_id, tag FROM (
+        SELECT pc.professor_id, t.tag,
+               ROW_NUMBER() OVER (
+                 PARTITION BY pc.professor_id ORDER BY COUNT(*) DESC, t.tag
+               ) AS rn
+          FROM reviews r
+          JOIN professor_courses pc ON pc.id = r.professor_course_id,
+               unnest(r.tags) AS t(tag)
+         WHERE pc.professor_id IN (${ids})
+           AND r.status = 'visible'
+           AND r.moderation_status IN ('live', 'soft_flagged')
+         GROUP BY pc.professor_id, t.tag
+      ) ranked
+      WHERE rn <= ${SEARCH_TOP_TAGS}
+      ORDER BY professor_id, rn
+    `,
+  ])
+
+  for (const a of aggregates) {
+    out.set(a.professor_id, {
+      overallScore: a.overall === null ? null : Number(a.overall),
+      reviewCount: a.review_count,
+      topTags: [],
+    })
+  }
+  for (const t of tags) {
+    const entry = out.get(t.professor_id)
+    if (entry) entry.topTags.push(t.tag)
+  }
+  return out
 }

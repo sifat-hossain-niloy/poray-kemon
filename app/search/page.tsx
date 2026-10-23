@@ -55,17 +55,24 @@ export default async function SearchPage({ searchParams }: PageProps) {
           noResults: (q: string) => `No results found for "${q}"`,
           tryAgain: 'Try a different search, or check the spelling.',
           total: (n: number) => `${n.toLocaleString('en-US')} results`,
+          reviews: (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'review' : 'reviews'}`,
+          noReviews: 'No reviews yet',
+          outOfFive: '/ 5',
         }
       : {
           tooShort: 'কমপক্ষে ২টি অক্ষর লিখুন',
           noResults: (q: string) => `"${q}" এর জন্য কোনো ফলাফল পাওয়া যায়নি।`,
           tryAgain: 'অন্য কিছু লিখে দেখুন, অথবা বানান যাচাই করুন।',
           total: (n: number) => `${n.toLocaleString('bn-BD')} টি ফলাফল`,
+          reviews: (n: number) => `${n.toLocaleString('bn-BD')} টি রিভিউ`,
+          noReviews: 'এখনো কোনো রিভিউ নেই',
+          outOfFive: '/ ৫',
         }
 
   const { q } = await searchParams
   const query = (Array.isArray(q) ? q[0] : q)?.trim() ?? ''
   const results = query.length >= 2 ? await search(query) : []
+  const tagLabels = strings.tags as Record<string, string>
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
@@ -121,10 +128,33 @@ export default async function SearchPage({ searchParams }: PageProps) {
                           {r.subtitle}
                         </div>
                       </div>
-                      <Badge variant={KIND_VARIANT[r.kind]} className="shrink-0">
-                        {KIND_LABELS[r.kind]}
-                      </Badge>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge variant={KIND_VARIANT[r.kind]}>{KIND_LABELS[r.kind]}</Badge>
+                        {r.stats && r.stats.overallScore !== null ? (
+                          <span className="text-sm font-semibold tabular-nums">
+                            {r.stats.overallScore.toFixed(1)}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {' '}
+                              {t.outOfFive}
+                            </span>
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
+                    {r.stats ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="tabular-nums">
+                          {r.stats.reviewCount > 0 ? t.reviews(r.stats.reviewCount) : t.noReviews}
+                        </span>
+                        {r.stats.topTags
+                          .filter((tag) => tag in tagLabels)
+                          .map((tag) => (
+                            <Badge key={tag} variant="secondary" className="text-[10px]">
+                              {tagLabels[tag]}
+                            </Badge>
+                          ))}
+                      </div>
+                    ) : null}
                   </Card>
                 </Link>
               </li>
