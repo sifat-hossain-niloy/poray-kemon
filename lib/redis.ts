@@ -90,7 +90,9 @@ export async function acquireOnce(key: string, ttlSeconds: number): Promise<bool
 // ── Cache key constants ───────────────────────────────────────────────────────
 
 export const CACHE_KEYS = {
-  siteStats: 'stats:site',
+  // v2: FR-STAT-03 shape (professorsRated, coursesReviewed). Bumped so a
+  // cached v1 object is never read back with missing fields.
+  siteStats: 'stats:site:v2',
   professorProfile: (slug: string) => `prof:${slug}`,
   searchResults: (queryHash: string) => `search:${queryHash}`,
   topProfessors: 'leaderboard:top-professors',

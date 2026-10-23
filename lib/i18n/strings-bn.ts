@@ -11,11 +11,13 @@ export const BN = {
   },
 
   // ── Stats ─────────────────────────────────────────────────────────────────
+  // Labels only — callers render the (locale-formatted) number themselves
+  // and pick the form with `plural()` from lib/i18n/shared.
   stats: {
-    totalReviews: (n: number) => `${n} টি রিভিউ`,
-    totalProfessors: (n: number) => `${n} জন শিক্ষক`,
-    totalUniversities: (n: number) => `${n} টি বিশ্ববিদ্যালয়`,
-    totalCourses: (n: number) => `${n} টি কোর্স`,
+    reviews: { one: 'রিভিউ', other: 'রিভিউ' },
+    professorsRated: { one: 'শিক্ষক রেটিং পেয়েছেন', other: 'শিক্ষক রেটিং পেয়েছেন' },
+    universities: { one: 'বিশ্ববিদ্যালয়', other: 'বিশ্ববিদ্যালয়' },
+    coursesReviewed: { one: 'কোর্সের রিভিউ', other: 'কোর্সের রিভিউ' },
   },
 
   // ── Auth ──────────────────────────────────────────────────────────────────
