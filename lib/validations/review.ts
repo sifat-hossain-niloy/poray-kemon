@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import { BN } from '@/lib/i18n/strings-bn'
+
+// The tag vocabulary is the keys of the strings bundle. Anything else would
+// render as a raw string on every review card, so it is rejected here.
+const KNOWN_TAGS: ReadonlySet<string> = new Set(Object.keys(BN.tags))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Review submission schema
@@ -58,8 +63,12 @@ export const reviewSubmitSchema = z
       .optional()
       .or(z.literal('')),
 
-    // Multi-select tags
-    tags: z.array(z.string()).max(10).default([]),
+    // Multi-select tags — known keys only, duplicates collapsed
+    tags: z
+      .array(z.string().refine((t) => KNOWN_TAGS.has(t), { message: 'Unknown tag' }))
+      .max(10)
+      .default([])
+      .transform((tags) => [...new Set(tags)]),
 
     // Honeypot — must be empty. Bots fill this in.
     honeypot_field: z.string().max(0, 'Bot detected').default(''),
