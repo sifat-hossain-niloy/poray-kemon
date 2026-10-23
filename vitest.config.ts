@@ -8,6 +8,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./test/setup.ts'],
     include: ['**/__tests__/unit/**/*.test.ts', '**/__tests__/unit/**/*.test.tsx'],
+    // Claude Code session worktrees live inside the repo; their copies of the
+    // suite must not run (or fail) as part of this checkout's.
+    exclude: ['**/node_modules/**', '.claude/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

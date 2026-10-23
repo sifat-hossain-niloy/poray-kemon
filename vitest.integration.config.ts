@@ -12,6 +12,7 @@ export default defineConfig({
     // Per-test-file setup — mocks Redis, exposes the helpers.
     setupFiles: ['./test/setup.integration.ts'],
     include: ['**/__tests__/integration/**/*.test.ts'],
+    exclude: ['**/node_modules/**', '.claude/**'],
     pool: 'forks',
     poolOptions: {
       forks: {
