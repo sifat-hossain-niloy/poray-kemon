@@ -134,6 +134,7 @@ University → Department → Professor → ProfessorCourse → Review
                                             │
                                        review_submissions (who reviewed what — no review content)
                                        helpful_votes (who voted on what)
+                                       review_submission_tombstones (HMAC(sub, pc) of deleted accounts — one column, nothing else)
 ```
 
 ### Key aggregate pattern
@@ -168,6 +169,17 @@ Server: check review_submissions (has this user reviewed this professor+course?)
 
 Even with full DB access, you cannot determine who wrote any specific review.
 
+### Account deletion (`DELETE /api/me`)
+
+Deleting a user cascades `review_submissions`, which would let the same Google
+account sign in again and re-review everything. So the deletion transaction
+first writes one `review_submission_tombstones` row per submission:
+`HMAC-SHA256(ACCOUNT_TOMBSTONE_SECRET, sub ‖ professor_course_id)`, and
+`POST /api/reviews` returns 409 when the current sub's HMAC for that
+professor_course exists. The table has only the hash column: no course id,
+no user id, no timestamp. Never add any of those. Helpful votes are deleted
+with their `reviews.helpful_count` decremented in the same transaction.
+
 ---
 
 ## Environment Variables
@@ -187,6 +199,9 @@ GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
 
 # Admin
 ADMIN_SESSION_SECRET=<random-64-char>
+
+# Account deletion — keys review-submission tombstones; never rotate
+ACCOUNT_TOMBSTONE_SECRET=<random-48-char>
 
 # App
 NEXT_PUBLIC_SITE_URL=http://localhost:3000

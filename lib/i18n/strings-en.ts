@@ -175,6 +175,29 @@ export const EN: Strings = {
     languageEnglish: 'English',
   },
 
+  // ── Account deletion ──────────────────────────────────────────────────────
+  account: {
+    deleteHeading: 'Delete your account',
+    deleteIntro:
+      'You can permanently delete your account and everything linked to it. Reviews you wrote stay up, because no review is linked to any account.',
+    signInToDelete: 'Sign in first to delete your account.',
+    deleteButton: 'Delete my account',
+    confirmTitle: 'Before you delete your account',
+    confirmRemoved:
+      'Deleted: your Google identifier, display name, email domain, the record of which courses you reviewed, your helpful votes and your university requests.',
+    confirmKept:
+      "Kept: the reviews you wrote. We don't know which ones are yours, so we can't find them to delete them.",
+    confirmNoRereview:
+      "If you sign in again with the same Google account, you won't be able to review the professors and courses you reviewed before. Other courses are open as normal.",
+    confirmCheckbox: 'I understand a deleted account cannot be restored.',
+    confirmButton: 'Delete permanently',
+    cancel: 'Cancel',
+    deleting: 'Deleting…',
+    deleted: 'Your account has been deleted. Signing you out…',
+    failed: "Your account couldn't be deleted. Please try again in a moment.",
+    unavailable: "Account deletion isn't available right now. Please try again later.",
+  },
+
   // ── Errors ────────────────────────────────────────────────────────────────
   errors: {
     notFound: 'Page not found.',

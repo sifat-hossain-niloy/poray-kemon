@@ -71,18 +71,19 @@ Skip this section entirely if you want to defer Redis — the app will run cache
 3. Framework preset auto-detects as **Next.js**. Leave the defaults — `vercel.json` in the repo pins `buildCommand: pnpm vercel-build` and `regions: [bom1]`.
 4. **Environment Variables** — add these for the **Production** environment (also add to Preview + Development if you want previews to work against a Neon branch):
 
-   | Key                    | Value                                               |
-   | ---------------------- | --------------------------------------------------- |
-   | `DATABASE_URL`         | Neon pooled connection string                       |
-   | `DIRECT_URL`           | Neon direct connection string                       |
-   | `NEXTAUTH_SECRET`      | `openssl rand -base64 32`                           |
-   | `NEXTAUTH_URL`         | `https://poraykemon.com`                            |
-   | `GOOGLE_CLIENT_ID`     | from step 3                                         |
-   | `GOOGLE_CLIENT_SECRET` | from step 3                                         |
-   | `ADMIN_SESSION_SECRET` | `openssl rand -base64 48`                           |
-   | `NEXT_PUBLIC_SITE_URL` | `https://poraykemon.com`                            |
-   | `REDIS_URL`            | _(optional)_ Upstash `rediss://…` URL               |
-   | `ADMIN_SEED_PASSWORD`  | strong password — used once to seed the first admin |
+   | Key                        | Value                                               |
+   | -------------------------- | --------------------------------------------------- |
+   | `DATABASE_URL`             | Neon pooled connection string                       |
+   | `DIRECT_URL`               | Neon direct connection string                       |
+   | `NEXTAUTH_SECRET`          | `openssl rand -base64 32`                           |
+   | `NEXTAUTH_URL`             | `https://poraykemon.com`                            |
+   | `GOOGLE_CLIENT_ID`         | from step 3                                         |
+   | `GOOGLE_CLIENT_SECRET`     | from step 3                                         |
+   | `ADMIN_SESSION_SECRET`     | `openssl rand -base64 48`                           |
+   | `ACCOUNT_TOMBSTONE_SECRET` | `openssl rand -base64 48` — never rotate            |
+   | `NEXT_PUBLIC_SITE_URL`     | `https://poraykemon.com`                            |
+   | `REDIS_URL`                | _(optional)_ Upstash `rediss://…` URL               |
+   | `ADMIN_SEED_PASSWORD`      | strong password — used once to seed the first admin |
 
 5. Click **Deploy**. Vercel runs `pnpm install`, `prisma generate` (via `postinstall`), then `pnpm vercel-build` which runs `prisma migrate deploy` against Neon before building Next.js. First deploy takes ~3-5 minutes.
 
