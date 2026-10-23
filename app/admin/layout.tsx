@@ -65,6 +65,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   Universities
                 </Link>
               ) : null}
+              {canAdmin(session.role) ? (
+                <Link
+                  href="/admin/audit"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Audit log
+                </Link>
+              ) : null}
               {canSuperAdmin(session.role) ? (
                 <Link
                   href="/admin/users"

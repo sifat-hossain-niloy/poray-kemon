@@ -12,6 +12,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { CACHE_KEYS, deleteCache } from '@/lib/redis'
+import { requireStaff } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import {
   excludeReviewFromAggregate,
   includeReviewInAggregate,
@@ -30,6 +32,10 @@ interface RouteCtx {
 }
 
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  // The proxy already gates /api/admin/*; checking here too means a routing
+  // mistake can't expose moderation, and gives the audit entry its actor.
+  const guard = await requireStaff()
+  if (guard.error) return guard.error
   const { id: idRaw } = await ctx.params
   const reviewId = Number(idRaw)
   if (!Number.isInteger(reviewId) || reviewId <= 0) {
@@ -90,6 +96,16 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
       await includeReviewInAggregate(tx, reviewId)
     }
     await tx.review.update({ where: { id: reviewId }, data })
+    await recordAudit(tx, guard.session, {
+      action: `review.${action}`,
+      targetType: 'review',
+      targetId: reviewId,
+      details: {
+        from: { moderationStatus: review.moderationStatus, status: review.status },
+        to: { moderationStatus: nextModerationStatus, status: nextStatus },
+        ...(notes ? { notes } : {}),
+      },
+    })
   })
 
   // Invalidate caches the public site reads

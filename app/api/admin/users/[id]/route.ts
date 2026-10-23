@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,14 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
     )
   }
 
-  await db.adminUser.delete({ where: { id } })
+  await db.$transaction(async (tx) => {
+    await tx.adminUser.delete({ where: { id } })
+    await recordAudit(tx, session, {
+      action: 'staff.delete',
+      targetType: 'admin_user',
+      targetId: id,
+      details: { username: target.username, role: target.role },
+    })
+  })
   return NextResponse.json({ deleted: { id, username: target.username } })
 }

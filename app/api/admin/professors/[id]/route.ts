@@ -3,6 +3,8 @@
 //           designation?: ..., nameEn?: ..., nameBn?: ... }
 
 import { NextResponse } from 'next/server'
+import { requireStaff } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { CACHE_KEYS, deleteCache } from '@/lib/redis'
@@ -34,6 +36,8 @@ interface RouteCtx {
 }
 
 export async function PATCH(req: Request, ctx: RouteCtx) {
+  const guard = await requireStaff()
+  if (guard.error) return guard.error
   const { id: idRaw } = await ctx.params
   const id = Number(idRaw)
   if (!Number.isInteger(id) || id <= 0) {
@@ -54,7 +58,15 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await db.professor.update({ where: { id }, data: parsed.data })
+  await db.$transaction(async (tx) => {
+    await tx.professor.update({ where: { id }, data: parsed.data })
+    await recordAudit(tx, guard.session, {
+      action: 'professor.update',
+      targetType: 'professor',
+      targetId: id,
+      details: { changes: parsed.data },
+    })
+  })
 
   await deleteCache(CACHE_KEYS.professorProfile(existing.publicId))
 

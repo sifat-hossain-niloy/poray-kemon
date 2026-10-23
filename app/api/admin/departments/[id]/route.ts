@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { departmentUpdateSchema } from '@/lib/validations/admin'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +39,15 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   if (d.status !== undefined) data.status = d.status
 
   try {
-    await db.department.update({ where: { id }, data })
+    await db.$transaction(async (tx) => {
+      await tx.department.update({ where: { id }, data })
+      await recordAudit(tx, guard.session, {
+        action: 'department.update',
+        targetType: 'department',
+        targetId: id,
+        details: { changes: d },
+      })
+    })
     return NextResponse.json({ ok: true })
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
