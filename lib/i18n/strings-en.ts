@@ -14,10 +14,10 @@ export const EN: Strings = {
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   stats: {
-    totalReviews: (n: number) => `${n.toLocaleString('en-US')} reviews`,
-    totalProfessors: (n: number) => `${n.toLocaleString('en-US')} professors`,
-    totalUniversities: (n: number) => `${n.toLocaleString('en-US')} universities`,
-    totalCourses: (n: number) => `${n.toLocaleString('en-US')} courses`,
+    reviews: { one: 'review', other: 'reviews' },
+    professorsRated: { one: 'professor rated', other: 'professors rated' },
+    universities: { one: 'university', other: 'universities' },
+    coursesReviewed: { one: 'course reviewed', other: 'courses reviewed' },
   },
 
   // ── Auth ──────────────────────────────────────────────────────────────────

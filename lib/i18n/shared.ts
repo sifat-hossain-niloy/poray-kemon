@@ -19,3 +19,13 @@ export function isValidLocale(value: unknown): value is Locale {
 export function stringsFor(locale: Locale) {
   return STRING_BUNDLES[locale]
 }
+
+export interface PluralLabel {
+  one: string
+  other: string
+}
+
+/** English needs singular/plural; Bangla bundles repeat the same word. */
+export function plural(n: number, label: PluralLabel): string {
+  return n === 1 ? label.one : label.other
+}

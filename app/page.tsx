@@ -1,33 +1,10 @@
-import { db } from '@/lib/db'
-import { getCache, setCache, CACHE_KEYS, CACHE_TTL } from '@/lib/redis'
+import { getSiteStats } from '@/lib/site-stats'
+import { plural } from '@/lib/i18n/shared'
 import { getLocale, getStrings } from '@/lib/i18n'
 import { SearchBox } from '@/components/search/SearchBox'
 import { FirstVisitDisclaimer } from '@/components/homepage/FirstVisitDisclaimer'
 import { TopProfessorsLeaderboard } from '@/components/homepage/TopProfessorsLeaderboard'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
-
-// ── Site stats fetched once per minute via Redis ──────────────────────────────
-
-interface SiteStats {
-  totalReviews: number
-  totalProfessors: number
-  totalUniversities: number
-}
-
-async function getSiteStats(): Promise<SiteStats> {
-  const cached = await getCache<SiteStats>(CACHE_KEYS.siteStats)
-  if (cached) return cached
-
-  const [totalReviews, totalProfessors, totalUniversities] = await Promise.all([
-    db.review.count({ where: { status: 'visible', moderationStatus: 'live' } }),
-    db.professor.count(),
-    db.university.count(),
-  ])
-
-  const stats: SiteStats = { totalReviews, totalProfessors, totalUniversities }
-  await setCache(CACHE_KEYS.siteStats, stats, CACHE_TTL.siteStats)
-  return stats
-}
 
 // Homepage reads live counts from Postgres/Redis. Force dynamic so Next 16
 // doesn't try to prerender it at build time (build has no DB reachable).
@@ -69,23 +46,29 @@ export default async function HomePage() {
 
           {/* Site stats — each card links to its own listing so a
               new visitor can jump straight into content. */}
-          <div className="grid grid-cols-3 gap-4 pt-4">
+          <div className="grid grid-cols-2 gap-3 pt-4 sm:grid-cols-4 sm:gap-4">
             <StatCard
               href="/reviews"
               value={stats.totalReviews}
-              label={strings.stats.totalReviews(stats.totalReviews)}
+              label={plural(stats.totalReviews, strings.stats.reviews)}
               numberLocale={numberLocale}
             />
             <StatCard
               href="/professors"
-              value={stats.totalProfessors}
-              label={strings.stats.totalProfessors(stats.totalProfessors)}
+              value={stats.professorsRated}
+              label={plural(stats.professorsRated, strings.stats.professorsRated)}
               numberLocale={numberLocale}
             />
             <StatCard
               href="/universities"
-              value={stats.totalUniversities}
-              label={strings.stats.totalUniversities(stats.totalUniversities)}
+              value={stats.coursesReviewed}
+              label={plural(stats.coursesReviewed, strings.stats.coursesReviewed)}
+              numberLocale={numberLocale}
+            />
+            <StatCard
+              href="/universities"
+              value={stats.universitiesCovered}
+              label={plural(stats.universitiesCovered, strings.stats.universities)}
               numberLocale={numberLocale}
             />
           </div>
