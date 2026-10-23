@@ -1,6 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { ADMIN_COOKIE_NAME, verifyAdminSessionToken } from '@/lib/admin-auth'
-import { DEFAULT_LOCALE, LOCALE_COOKIE_NAME, isValidLocale } from '@/lib/i18n/shared'
+import {
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE_MAX_AGE,
+  LOCALE_COOKIE_NAME,
+  isValidLocale,
+  localeFromAcceptLanguage,
+  shouldWriteLocaleCookie,
+} from '@/lib/i18n/shared'
 
 // Locale prefix regex: matches /en, /en/, /en/foo, /bn, /bn/... — captures
 // the locale in group 1 and the rest of the path (with leading slash, or
@@ -68,7 +75,8 @@ export async function proxy(req: NextRequest) {
 
   const localeMatch = pathname.match(LOCALE_PATH_RE)
   if (localeMatch) {
-    const locale = localeMatch[1] as string
+    // The regex only captures en|bn; the guard narrows the type without a cast.
+    const locale = isValidLocale(localeMatch[1]) ? localeMatch[1] : DEFAULT_LOCALE
     const rest = (localeMatch[2] as string | undefined) || '/'
 
     // Security: URLs like /en/admin/... must NOT be internally rewritten and
@@ -96,19 +104,26 @@ export async function proxy(req: NextRequest) {
       request: { headers: requestHeaders },
     })
     response.headers.set('x-locale', locale)
-    // Also refresh the cookie so /-typed URLs later use the same locale.
-    response.cookies.set(LOCALE_COOKIE_NAME, locale, {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 365,
-      sameSite: 'lax',
-    })
+    // Only visitors who already opted in via the language toggle carry a
+    // locale cookie; keep theirs in sync. Never mint one for a reader
+    // (NFR-PRIV-02) — the URL already carries the locale.
+    if (shouldWriteLocaleCookie(req.cookies.get(LOCALE_COOKIE_NAME)?.value, locale)) {
+      response.cookies.set(LOCALE_COOKIE_NAME, locale, {
+        path: '/',
+        maxAge: LOCALE_COOKIE_MAX_AGE,
+        sameSite: 'lax',
+      })
+    }
     return response
   }
 
-  // No locale prefix on a public path — redirect to the cookie-remembered
-  // locale, or the default. 307 preserves method + body.
+  // No locale prefix on a public path — redirect to the remembered choice,
+  // else the browser's language preference, else the default. 307
+  // preserves method + body.
   const cookieLocale = req.cookies.get(LOCALE_COOKIE_NAME)?.value
-  const target = isValidLocale(cookieLocale) ? cookieLocale : DEFAULT_LOCALE
+  const target = isValidLocale(cookieLocale)
+    ? cookieLocale
+    : (localeFromAcceptLanguage(req.headers.get('accept-language')) ?? DEFAULT_LOCALE)
   const redirectUrl = req.nextUrl.clone()
   redirectUrl.pathname = `/${target}${pathname === '/' ? '' : pathname}`
   return NextResponse.redirect(redirectUrl, 307)
