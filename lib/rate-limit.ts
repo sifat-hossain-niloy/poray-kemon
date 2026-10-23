@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createHmac } from 'node:crypto'
-import { redis } from '@/lib/redis'
+import { liveClient } from '@/lib/redis'
 
 /** Enough for a full semester's course load in one sitting. */
 export const REVIEWS_PER_DAY = 6
@@ -48,6 +48,7 @@ function secret(): string {
  *  absent or down fails open — the quota is abuse friction, not an
  *  integrity guarantee (the one-review-per-course constraint is in SQL). */
 export async function hasReviewQuota(userId: string, now = new Date()): Promise<boolean> {
+  const redis = liveClient()
   if (!redis) return true
   try {
     const { day } = dhakaDayBucket(now)
@@ -61,6 +62,7 @@ export async function hasReviewQuota(userId: string, now = new Date()): Promise<
 /** Count one successful submission against today's quota. Called only after
  *  the review transaction commits, so rejected submissions are free. */
 export async function consumeReviewQuota(userId: string, now = new Date()): Promise<void> {
+  const redis = liveClient()
   if (!redis) return
   try {
     const { day, secondsLeft } = dhakaDayBucket(now)

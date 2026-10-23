@@ -18,10 +18,17 @@ function createRedisClient(): Redis | null {
   const url = process.env.REDIS_URL
   if (!url) return null
 
+  // Redis is a cache here, never a dependency, so every timeout is tight:
+  // with ioredis defaults (10 s connect timeout, retried per command) an
+  // unreachable host stalled the first request on each instance for ~40 s
+  // — a function timeout on Vercel. Healthy Redis answers in single-digit
+  // milliseconds, so these limits only ever bite when it is broken.
   const client = new Redis(url, {
-    maxRetriesPerRequest: 3,
+    connectTimeout: 500,
+    commandTimeout: 500,
+    maxRetriesPerRequest: 1,
     retryStrategy(times) {
-      if (times > 3) return null
+      if (times > 1) return null
       return Math.min(times * 50, 200)
     },
     lazyConnect: true,
@@ -42,14 +49,21 @@ export const redis: Redis | null = globalForRedis.redis ?? createRedisClient()
 
 if (process.env.NODE_ENV !== 'production') globalForRedis.redis = redis
 
+/** Null when Redis is unset or ioredis has given up reconnecting ('end'),
+ *  so a dead cache costs nothing per call instead of a timeout each time. */
+export function liveClient(): Redis | null {
+  return redis && redis.status !== 'end' ? redis : null
+}
+
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 // Every helper is safe to call even when `redis` is null. Cache misses look
 // identical to a Redis outage: read returns null, writes are dropped.
 
 export async function getCache<T>(key: string): Promise<T | null> {
-  if (!redis) return null
+  const client = liveClient()
+  if (!client) return null
   try {
-    const value = await redis.get(key)
+    const value = await client.get(key)
     return value ? (JSON.parse(value) as T) : null
   } catch {
     return null
@@ -57,18 +71,20 @@ export async function getCache<T>(key: string): Promise<T | null> {
 }
 
 export async function setCache<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
-  if (!redis) return
+  const client = liveClient()
+  if (!client) return
   try {
-    await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds)
+    await client.set(key, JSON.stringify(value), 'EX', ttlSeconds)
   } catch {
     // Non-fatal — app continues without cache
   }
 }
 
 export async function deleteCache(key: string): Promise<void> {
-  if (!redis) return
+  const client = liveClient()
+  if (!client) return
   try {
-    await redis.del(key)
+    await client.del(key)
   } catch {
     // Non-fatal
   }
@@ -78,9 +94,10 @@ export async function deleteCache(key: string): Promise<void> {
 // true iff we won the lock. If Redis is absent, returns true — the SQL
 // unique constraint on (user_id, review_id) is our fallback dedup.
 export async function acquireOnce(key: string, ttlSeconds: number): Promise<boolean> {
-  if (!redis) return true
+  const client = liveClient()
+  if (!client) return true
   try {
-    const res = await redis.set(key, '1', 'EX', ttlSeconds, 'NX')
+    const res = await client.set(key, '1', 'EX', ttlSeconds, 'NX')
     return res === 'OK'
   } catch {
     return true
