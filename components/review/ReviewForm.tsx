@@ -12,6 +12,13 @@ import { DepartmentTypeahead, type DepartmentSelection } from './DepartmentTypea
 import { CourseFields } from './CourseFields'
 import { UniversityTypeahead, type UniversitySelection } from './UniversityTypeahead'
 import { EligibilityGate } from './EligibilityGate'
+import {
+  SEMESTER_TERMS,
+  isSemesterTerm,
+  semesterYearOptions,
+  termLabel,
+  type SemesterTerm,
+} from '@/lib/semester'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,6 +92,8 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
   const professorNameEn = professorSelection?.name_en ?? ''
   const [courseCode, setCourseCode] = useState('')
   const [courseName, setCourseName] = useState('')
+  const [semesterTerm, setSemesterTerm] = useState<SemesterTerm | ''>('')
+  const [semesterYear, setSemesterYear] = useState<number | ''>('')
 
   // Ratings
   const [teachingQuality, setTeachingQuality] = useState(0)
@@ -136,6 +145,12 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
           sectionProf: 'Professor & course',
           profLabel: 'Professor: ',
           pickOne: '— Pick one —',
+          semesterLabel: 'Semester you took it (optional)',
+          semesterTerm: 'Term',
+          semesterYear: 'Year',
+          semesterHint:
+            'Helps others see how the course has changed over time. Skip it if your class was small enough that the term would identify you.',
+          semesterIncomplete: 'Pick both a term and a year, or neither',
         }
       : {
           pickUni: 'বিশ্ববিদ্যালয় বেছে নিন',
@@ -153,6 +168,12 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
           sectionProf: 'শিক্ষক ও কোর্স',
           profLabel: 'শিক্ষক: ',
           pickOne: '— বেছে নিন —',
+          semesterLabel: 'কোন সেমিস্টারে নিয়েছেন (ঐচ্ছিক)',
+          semesterTerm: 'সেমিস্টার',
+          semesterYear: 'বছর',
+          semesterHint:
+            'সময়ের সাথে কোর্সটি কেমন বদলেছে তা বুঝতে সাহায্য করে। ক্লাস ছোট হলে, যেখানে সেমিস্টার দিয়েই আপনাকে চেনা যেতে পারে, এটি বাদ দিন।',
+          semesterIncomplete: 'সেমিস্টার ও বছর দুটোই দিন, অথবা কোনোটিই না',
         }
 
   function validate(): string | null {
@@ -167,6 +188,7 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
       if (!departmentSelection) return t.pickDept
     }
     if (!courseName.trim()) return t.needCourse
+    if ((semesterTerm === '') !== (semesterYear === '')) return t.semesterIncomplete
     if (!teachingQuality) return t.needTeaching
     if (!gradingFairness) return t.needGrading
     if (!courseDifficulty) return t.needDifficulty
@@ -220,6 +242,9 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
         would_recommend: wouldRecommend,
         review_text: reviewText.trim() || undefined,
         tags,
+        ...(semesterTerm && semesterYear
+          ? { semester_term: semesterTerm, semester_year: semesterYear }
+          : {}),
         honeypot_field: honeypot,
       }
 
@@ -397,6 +422,41 @@ export function ReviewForm({ preselectedProfessor, displayName, isAuthenticated 
             namePlaceholder: 'Data Structures',
           }}
         />
+
+        <fieldset className="space-y-1.5">
+          <legend className="block text-sm font-medium">{t.semesterLabel}</legend>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              aria-label={t.semesterTerm}
+              value={semesterTerm}
+              onChange={(e) =>
+                setSemesterTerm(isSemesterTerm(e.target.value) ? e.target.value : '')
+              }
+              className={inputClass}
+            >
+              <option value="">{t.semesterTerm}</option>
+              {SEMESTER_TERMS.map((term) => (
+                <option key={term} value={term}>
+                  {termLabel(term, locale)}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label={t.semesterYear}
+              value={semesterYear}
+              onChange={(e) => setSemesterYear(e.target.value ? Number(e.target.value) : '')}
+              className={inputClass}
+            >
+              <option value="">{t.semesterYear}</option>
+              {semesterYearOptions().map((year) => (
+                <option key={year} value={year}>
+                  {locale === 'bn' ? year.toLocaleString('bn-BD', { useGrouping: false }) : year}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-muted-foreground">{t.semesterHint}</p>
+        </fieldset>
       </Section>
 
       {/* ── Ratings ───────────────────────────────────────────────────────── */}

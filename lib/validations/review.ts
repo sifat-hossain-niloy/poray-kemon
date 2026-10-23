@@ -1,3 +1,4 @@
+import { SEMESTER_TERMS, isFutureSemester } from '@/lib/semester'
 import { z } from 'zod'
 import { BN } from '@/lib/i18n/strings-bn'
 
@@ -55,6 +56,10 @@ export const reviewSubmitSchema = z
     // Recommendation
     would_recommend: z.coerce.boolean(),
 
+    // Optional semester the course was taken in — both or neither
+    semester_term: z.enum(SEMESTER_TERMS).optional(),
+    semester_year: z.coerce.number().int().min(2000).max(2100).optional(),
+
     // Optional free text — if provided must be 20–500 chars
     review_text: z
       .string()
@@ -96,6 +101,17 @@ export const reviewSubmitSchema = z
       return !text || text.length >= 20
     },
     { message: 'রিভিউ কমপক্ষে ২০ অক্ষরের হতে হবে', path: ['review_text'] },
+  )
+  .refine((data) => (data.semester_term === undefined) === (data.semester_year === undefined), {
+    message: 'semester_term and semester_year must be provided together',
+    path: ['semester_year'],
+  })
+  .refine(
+    (data) =>
+      data.semester_term === undefined ||
+      data.semester_year === undefined ||
+      !isFutureSemester(data.semester_term, data.semester_year),
+    { message: 'Semester cannot be in the future', path: ['semester_year'] },
   )
 
 export type ReviewSubmitInput = z.infer<typeof reviewSubmitSchema>

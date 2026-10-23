@@ -43,6 +43,8 @@ async function getRecentReviews() {
       helpfulCount: true,
       submittedAt: true,
       moderationStatus: true,
+      semesterTerm: true,
+      semesterYear: true,
       professorCourse: {
         select: {
           professor: {
@@ -112,6 +114,8 @@ export default async function RecentReviewsPage() {
               helpfulCount: r.helpfulCount,
               submittedAt: r.submittedAt,
               moderationStatus: r.moderationStatus,
+              semesterTerm: r.semesterTerm,
+              semesterYear: r.semesterYear,
             }
             return (
               <li key={r.id}>

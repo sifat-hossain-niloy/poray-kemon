@@ -273,6 +273,44 @@ describe('POST /api/reviews', () => {
 
   // ── Honeypot ──────────────────────────────────────────────────────────────
 
+  // ── Semester (optional, both-or-neither) ──────────────────────────────────
+
+  it('stores an optional semester', async () => {
+    mockSession(seeded.user1Id)
+    const res = await POST(
+      jsonPost(
+        URL,
+        validBody({
+          university_id: seeded.uniId,
+          department_id: seeded.deptId,
+          semester_term: 'fall',
+          semester_year: 2025,
+        }),
+      ),
+    )
+    expect(res.status).toBe(201)
+    const review = await db.review.findFirstOrThrow()
+    expect(review.semesterTerm).toBe('fall')
+    expect(review.semesterYear).toBe(2025)
+  })
+
+  it.each([
+    ['a term without a year', { semester_term: 'spring' }],
+    ['a year without a term', { semester_year: 2025 }],
+    ['an unknown term', { semester_term: 'autumn', semester_year: 2025 }],
+    ['a future semester', { semester_term: 'fall', semester_year: new Date().getFullYear() + 1 }],
+  ])('rejects %s with 400', async (_label, extra) => {
+    mockSession(seeded.user1Id)
+    const res = await POST(
+      jsonPost(
+        URL,
+        validBody({ university_id: seeded.uniId, department_id: seeded.deptId, ...extra }),
+      ),
+    )
+    expect(res.status).toBe(400)
+    expect(await db.review.count()).toBe(0)
+  })
+
   it('rejects a bot submission via honeypot field with 400', async () => {
     mockSession(seeded.user1Id)
     const res = await POST(
