@@ -3,7 +3,7 @@
 import { useTransition } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useLocale, useStrings } from '@/lib/i18n/client'
-import type { Locale } from '@/lib/i18n/shared'
+import { localeCookieString, type Locale } from '@/lib/i18n/shared'
 
 // Rewrites the current URL so `/en/foo` becomes `/bn/foo` (and vice versa).
 // Path-based locales mean each language has a distinct URL that Google can
@@ -23,6 +23,9 @@ export function LanguageToggle() {
     const withoutLocale = pathname.replace(/^\/(en|bn)(?=\/|$)/, '') || '/'
     const query = searchParams.toString()
     const target = `/${next}${withoutLocale === '/' ? '' : withoutLocale}${query ? `?${query}` : ''}`
+    // An explicit choice is the only time we store one (NFR-PRIV-02); the
+    // proxy keeps it in sync from then on.
+    document.cookie = localeCookieString(next, window.location.protocol === 'https:')
     startTransition(() => {
       window.location.assign(target)
     })
