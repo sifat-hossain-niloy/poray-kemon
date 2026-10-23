@@ -73,6 +73,11 @@ export async function Footer() {
                   {locale === 'en' ? 'Guidelines' : 'গাইডলাইন'}
                 </Link>
               </li>
+              <li>
+                <Link href="/privacy" className="hover:underline">
+                  {locale === 'en' ? 'Privacy' : 'গোপনীয়তা'}
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
