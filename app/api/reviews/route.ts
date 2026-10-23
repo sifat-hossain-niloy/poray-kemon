@@ -30,6 +30,7 @@ import { parseDepartmentName } from '@/lib/department-parser'
 import { deleteCache, CACHE_KEYS } from '@/lib/redis'
 import { getStrings } from '@/lib/i18n'
 import { checkEligibility, formatRequiredSuffixes } from '@/lib/eligibility'
+import { consumeReviewQuota, hasReviewQuota } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -330,6 +331,16 @@ export async function POST(req: Request) {
     }
   }
 
+  // ── 4b. Daily per-account quota (NFR-SEC-07) ─────────────────────────────
+  // Checked before any find-or-create so a throttled request leaves no
+  // auto-created departments/professors/courses behind.
+  if (!(await hasReviewQuota(userId))) {
+    return NextResponse.json(
+      { error: (await getStrings()).reviewResponse.rateLimited, code: 'RATE_LIMITED' },
+      { status: 429 },
+    )
+  }
+
   // ── 5. Resolve department → professor → course → professor_course ────────
   //
   // We resolve the department first because the professor's row needs a
@@ -483,8 +494,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: (await getStrings()).errors.serverError }, { status: 500 })
   }
 
-  // ── 6. Cache invalidation ─────────────────────────────────────────────────
+  // ── 6. Quota + cache invalidation ─────────────────────────────────────────
   await Promise.all([
+    consumeReviewQuota(userId),
     deleteCache(CACHE_KEYS.siteStats),
     deleteCache(CACHE_KEYS.professorProfile(professor.publicId)),
   ])

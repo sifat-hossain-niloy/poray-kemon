@@ -62,6 +62,7 @@ export const EN: Strings = {
     slurBlock: 'Discriminatory language is not allowed.',
     accusationBlock: 'Personal accusations are not allowed on this platform.',
     duplicateBlock: 'This review has already been submitted.',
+    rateLimited: "You've reached today's review limit. Please try again tomorrow.",
   },
 
   // ── Review display ────────────────────────────────────────────────────────
