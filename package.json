@@ -21,6 +21,8 @@
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "db:migrate:prod": "prisma migrate deploy",
     "db:seed": "dotenv -e .env.local -- ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "db:seed:du": "dotenv -e .env.local -- ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed-du-professors.ts",
+    "db:seed:demo": "dotenv -e .env.local -- ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed-demo-reviews.ts",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:reset": "dotenv -e .env.local -- prisma migrate reset",
     "db:generate": "prisma generate",
