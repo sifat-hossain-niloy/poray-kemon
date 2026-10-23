@@ -14,6 +14,9 @@ import { DELETE as deleteStaff } from '@/app/api/admin/users/[id]/route'
 import { POST as login } from '@/app/api/admin/login/route'
 import { cleanDb, seedMinimal, type SeededRow } from '@/test/integration-helpers'
 
+// CI provides no ADMIN_SESSION_SECRET; the signer only needs a stable one.
+process.env.ADMIN_SESSION_SECRET ||= 'integration-test-admin-secret-0123456789'
+
 const jar = vi.hoisted(() => new Map<string, string>())
 vi.mock('next/headers', () => ({
   cookies: async () => ({
