@@ -232,6 +232,9 @@ model Review {
   @@index([professorCourseId, helpfulCount(sort: Desc)], map: "reviews_by_helpful_idx")
   @@index([professorCourseId, submittedAt(sort: Desc)], map: "reviews_by_recent_idx")
   @@index([moderationStatus], map: "reviews_moderation_idx")
+  // Site-wide recency: the /reviews feed and the trending-professors window
+  // both filter/sort on submitted_at without a professor_course scope.
+  @@index([submittedAt(sort: Desc)], map: "reviews_submitted_at_idx")
   @@map("reviews")
 }
 
