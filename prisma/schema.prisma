@@ -1,5 +1,12 @@
 generator client {
   provider = "prisma-client-js"
+  // Loads included relations with LATERAL JOINs in a single SQL statement
+  // instead of one round trip per relation level. On Vercel every round trip
+  // pays function→database latency, so nested includes (professor page:
+  // professor → university/department → professor_courses → course/reviews)
+  // went from ~6 sequential queries to 1. Also makes nested `take` a SQL
+  // LIMIT instead of fetching every row and slicing in memory.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
