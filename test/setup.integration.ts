@@ -75,6 +75,7 @@ vi.mock('@/lib/redis', async () => {
 
   return {
     redis,
+    liveClient: () => redis,
     getCache: vi.fn(async () => null),
     setCache: vi.fn(async () => {}),
     deleteCache: vi.fn(async (key: string) => {
