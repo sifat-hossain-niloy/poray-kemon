@@ -146,6 +146,29 @@ describe('POST /api/reviews', () => {
     expect(await db.reviewSubmission.count()).toBe(1)
   })
 
+  it('allows two different users to review the same professor+course', async () => {
+    const body = {
+      ...validBody(),
+      university_id: seeded.uniId,
+      department_id: seeded.deptId,
+    }
+
+    mockSession(seeded.user1Id)
+    expect((await POST(jsonPost(URL, body))).status).toBe(201)
+
+    mockSession(seeded.user2Id)
+    expect((await POST(jsonPost(URL, { ...body, teaching_quality: 3 }))).status).toBe(201)
+
+    expect(await db.review.count()).toBe(2)
+
+    // Running average should be (5+3)/2 = 4
+    const pc = await db.professorCourse.findFirstOrThrow()
+    expect(pc.reviewCount).toBe(2)
+    expect(Number(pc.avgTeachingQuality!.toString())).toBeCloseTo(4, 5)
+  })
+
+  // ── Honeypot ──────────────────────────────────────────────────────────────
+
   // ── Semester (optional, both-or-neither) ──────────────────────────────────
 
   it('stores an optional semester', async () => {
@@ -183,29 +206,6 @@ describe('POST /api/reviews', () => {
     expect(res.status).toBe(400)
     expect(await db.review.count()).toBe(0)
   })
-
-  it('allows two different users to review the same professor+course', async () => {
-    const body = {
-      ...validBody(),
-      university_id: seeded.uniId,
-      department_id: seeded.deptId,
-    }
-
-    mockSession(seeded.user1Id)
-    expect((await POST(jsonPost(URL, body))).status).toBe(201)
-
-    mockSession(seeded.user2Id)
-    expect((await POST(jsonPost(URL, { ...body, teaching_quality: 3 }))).status).toBe(201)
-
-    expect(await db.review.count()).toBe(2)
-
-    // Running average should be (5+3)/2 = 4
-    const pc = await db.professorCourse.findFirstOrThrow()
-    expect(pc.reviewCount).toBe(2)
-    expect(Number(pc.avgTeachingQuality!.toString())).toBeCloseTo(4, 5)
-  })
-
-  // ── Honeypot ──────────────────────────────────────────────────────────────
 
   it('rejects a bot submission via honeypot field with 400', async () => {
     mockSession(seeded.user1Id)

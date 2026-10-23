@@ -1,5 +1,5 @@
-import { z } from 'zod'
 import { SEMESTER_TERMS, isFutureSemester } from '@/lib/semester'
+import { z } from 'zod'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Review submission schema
@@ -51,6 +51,10 @@ export const reviewSubmitSchema = z
     // Recommendation
     would_recommend: z.coerce.boolean(),
 
+    // Optional semester the course was taken in — both or neither
+    semester_term: z.enum(SEMESTER_TERMS).optional(),
+    semester_year: z.coerce.number().int().min(2000).max(2100).optional(),
+
     // Optional free text — if provided must be 20–500 chars
     review_text: z
       .string()
@@ -58,10 +62,6 @@ export const reviewSubmitSchema = z
       .max(500, 'রিভিউ সর্বোচ্চ ৫০০ অক্ষর হতে পারে')
       .optional()
       .or(z.literal('')),
-
-    // Optional semester the course was taken in — both or neither
-    semester_term: z.enum(SEMESTER_TERMS).optional(),
-    semester_year: z.coerce.number().int().min(2000).max(2100).optional(),
 
     // Multi-select tags
     tags: z.array(z.string()).max(10).default([]),
