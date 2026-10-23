@@ -11,17 +11,14 @@
 
 import type { Metadata } from 'next'
 import { auth, signIn } from '@/lib/auth'
-import { db } from '@/lib/db'
+import { loadMyActivity } from '@/lib/my-activity'
 import { getLocale, getStrings } from '@/lib/i18n'
-import { obfuscateName } from '@/lib/name-obfuscation'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 export const dynamic = 'force-dynamic'
-
-const HELPFUL_LIMIT = 50
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale()
@@ -87,71 +84,7 @@ export default async function MyActivityPage() {
     )
   }
 
-  const userId = session.user.id
-  const [user, submissions, votes, requests] = await Promise.all([
-    db.user.findUnique({
-      where: { id: userId },
-      select: { createdAt: true, emailDomain: true },
-    }),
-    db.reviewSubmission.findMany({
-      where: { userId },
-      select: {
-        id: true,
-        professorCourse: {
-          select: {
-            course: { select: { courseCode: true, courseName: true, slug: true } },
-            professor: {
-              select: {
-                publicId: true,
-                nameEn: true,
-                nameBn: true,
-                university: { select: { shortName: true } },
-                department: { select: { shortName: true, nameEn: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
-    db.helpfulVote.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: HELPFUL_LIMIT,
-      select: {
-        id: true,
-        createdAt: true,
-        review: {
-          select: {
-            id: true,
-            reviewText: true,
-            status: true,
-            moderationStatus: true,
-            professorCourse: {
-              select: {
-                course: { select: { courseCode: true, courseName: true } },
-                professor: { select: { publicId: true, nameEn: true, nameBn: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
-    db.universityRequest.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, nameEn: true, status: true, adminNote: true, createdAt: true },
-    }),
-  ])
-
-  // review_submissions has no timestamp by design, so order alphabetically.
-  const reviewed = submissions
-    .map((s) => ({
-      id: s.id,
-      professor: s.professorCourse.professor,
-      course: s.professorCourse.course,
-      name: s.professorCourse.professor.nameBn ?? obfuscateName(s.professorCourse.professor.nameEn),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const { user, reviewed, helpful, requests } = await loadMyActivity(session.user.id)
 
   const courseLabel = (c: { courseCode: string | null; courseName: string }) =>
     c.courseCode ? `${c.courseCode} · ${c.courseName}` : c.courseName
@@ -190,7 +123,7 @@ export default async function MyActivityPage() {
                   }
                   className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 py-3 hover:bg-muted"
                 >
-                  <span className="font-medium">{r.name}</span>
+                  <span className="font-medium">{r.displayName}</span>
                   <span className="text-xs text-muted-foreground">
                     {courseLabel(r.course)} ·{' '}
                     {r.professor.department.shortName ?? r.professor.department.nameEn} ·{' '}
@@ -203,40 +136,31 @@ export default async function MyActivityPage() {
         )}
       </Section>
 
-      <Section title={t.helpful} count={votes.length} numberLocale={numberLocale}>
-        {votes.length === 0 ? (
+      <Section title={t.helpful} count={helpful.length} numberLocale={numberLocale}>
+        {helpful.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t.helpfulEmpty}</p>
         ) : (
           <ul className="space-y-2">
-            {votes.map((v) => {
-              const prof = v.review.professorCourse.professor
-              const hidden =
-                v.review.status !== 'visible' ||
-                v.review.moderationStatus === 'flagged_hidden' ||
-                v.review.moderationStatus === 'deleted'
-              return (
-                <li key={v.id}>
-                  <Link
-                    href={`/professors/${prof.publicId}#r-${v.review.id}`}
-                    className="block rounded-lg border border-border px-4 py-3 hover:bg-muted"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {prof.nameBn ?? obfuscateName(prof.nameEn)}
-                      </span>
-                      <span>{courseLabel(v.review.professorCourse.course)}</span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-sm">
-                      {hidden ? (
-                        <span className="italic text-muted-foreground">{t.removed}</span>
-                      ) : (
-                        (v.review.reviewText ?? '—')
-                      )}
-                    </p>
-                  </Link>
-                </li>
-              )
-            })}
+            {helpful.map((v) => (
+              <li key={v.id}>
+                <Link
+                  href={`/professors/${v.professorPublicId}#r-${v.reviewId}`}
+                  className="block rounded-lg border border-border px-4 py-3 hover:bg-muted"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{v.professorName}</span>
+                    <span>{courseLabel(v.course)}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-sm">
+                    {v.removed ? (
+                      <span className="italic text-muted-foreground">{t.removed}</span>
+                    ) : (
+                      (v.reviewText ?? '—')
+                    )}
+                  </p>
+                </Link>
+              </li>
+            ))}
           </ul>
         )}
       </Section>
