@@ -8,6 +8,7 @@ import { Footer } from '@/components/layout/Footer'
 import { LocaleProvider } from '@/lib/i18n/client'
 import { getLocale, getStrings } from '@/lib/i18n'
 import { getAdminSession } from '@/lib/admin-auth'
+import { auth } from '@/lib/auth'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
 import './globals.css'
 import { cn } from '@/lib/utils'
@@ -71,8 +72,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const [locale, staff] = await Promise.all([getLocale(), getAdminSession()])
+  const [locale, staff, userSession] = await Promise.all([getLocale(), getAdminSession(), auth()])
   const isStaff = staff !== null
+  // Every /api/auth/* response sets authjs.csrf-token and authjs.callback-url,
+  // so SessionProvider's on-mount fetch handed each reader two cookies
+  // (NFR-PRIV-02). A null session tells it there is nothing to fetch, and it
+  // also skips the focus refetch. Signed-in users still get undefined: their
+  // fetch rolls the JWT expiry forward and caches internalUserId in it, which
+  // auth() in a server component cannot write back.
+  const initialSession = userSession ? undefined : null
 
   return (
     // suppressHydrationWarning: THEME_INIT_SCRIPT adds `dark` to <html> before
@@ -88,7 +96,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
-        <SessionProvider>
+        <SessionProvider session={initialSession}>
           <LocaleProvider locale={locale}>
             <Navbar isStaff={isStaff} />
             <div className="flex flex-1 flex-col">{children}</div>
