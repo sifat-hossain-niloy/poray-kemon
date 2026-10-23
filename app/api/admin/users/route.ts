@@ -17,6 +17,7 @@ import bcrypt from 'bcryptjs'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { adminUserCreateSchema } from '@/lib/validations/admin'
 
 export const dynamic = 'force-dynamic'
@@ -49,15 +50,24 @@ export async function POST(req: Request) {
   const passwordHash = await bcrypt.hash(password, 12)
 
   try {
-    const created = await db.adminUser.create({
-      data: {
-        username,
-        email: email?.trim() || null,
-        passwordHash,
-        role,
-        createdBy: session.adminId,
-      },
-      select: { id: true, username: true, email: true, role: true, createdAt: true },
+    const created = await db.$transaction(async (tx) => {
+      const user = await tx.adminUser.create({
+        data: {
+          username,
+          email: email?.trim() || null,
+          passwordHash,
+          role,
+          createdBy: session.adminId,
+        },
+        select: { id: true, username: true, email: true, role: true, createdAt: true },
+      })
+      await recordAudit(tx, session, {
+        action: 'staff.create',
+        targetType: 'admin_user',
+        targetId: user.id,
+        details: { username, role },
+      })
+      return user
     })
     return NextResponse.json({ user: created }, { status: 201 })
   } catch (err) {

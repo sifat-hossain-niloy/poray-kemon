@@ -22,6 +22,7 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { requireStaff } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { adminPasswordChangeSchema } from '@/lib/validations/admin'
 
 export const dynamic = 'force-dynamic'
@@ -60,9 +61,16 @@ export async function POST(req: Request) {
   }
 
   const newHash = await bcrypt.hash(newPassword, 12)
-  await db.adminUser.update({
-    where: { id: admin.id },
-    data: { passwordHash: newHash },
+  await db.$transaction(async (tx) => {
+    await tx.adminUser.update({
+      where: { id: admin.id },
+      data: { passwordHash: newHash },
+    })
+    await recordAudit(tx, session, {
+      action: 'auth.password_change',
+      targetType: 'admin_user',
+      targetId: admin.id,
+    })
   })
 
   return NextResponse.json({ ok: true })
