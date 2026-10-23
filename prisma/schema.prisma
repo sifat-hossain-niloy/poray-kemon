@@ -52,6 +52,12 @@ enum ModerationStatus {
   deleted
 }
 
+enum SemesterTerm {
+  spring
+  summer
+  fall
+}
+
 enum ReviewStatus {
   visible
   hidden
@@ -222,6 +228,9 @@ model Review {
   moderationNotes     String?          @map("moderation_notes")
   status              ReviewStatus     @default(visible)
   submittedAt         DateTime         @default(now()) @map("submitted_at")
+  // Optional, and both-or-neither (CHECK constraint in the migration).
+  semesterTerm        SemesterTerm?    @map("semester_term")
+  semesterYear        Int?             @map("semester_year") @db.SmallInt
 
   professorCourse ProfessorCourse @relation(fields: [professorCourseId], references: [id])
   helpfulVotes    HelpfulVote[]
@@ -371,9 +380,32 @@ model AdminUser {
   createdAt    DateTime  @default(now()) @map("created_at")
   lastLogin    DateTime? @map("last_login")
 
+  auditEntries AdminAuditLog[]
+
   // The partial unique index that enforces "at most one super_admin" is
   // declared as raw SQL in the migration — Prisma doesn't yet model partial
   // indexes on enum equality. See migration.sql for the actual constraint.
 
   @@map("admin_users")
+}
+
+// Append-only trail of staff actions. Rows are never updated or deleted by
+// the app. admin_username is a snapshot so entries stay readable after the
+// staff account is removed (admin_id then goes NULL). No end-user ids are
+// ever written here — targets are reviews, reports, catalog rows and staff.
+model AdminAuditLog {
+  id            Int      @id @default(autoincrement())
+  adminId       Int?     @map("admin_id")
+  adminUsername String   @map("admin_username") @db.VarChar(100)
+  action        String   @db.VarChar(64)
+  targetType    String   @map("target_type") @db.VarChar(32)
+  targetId      String   @map("target_id") @db.VarChar(64)
+  details       Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  admin AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)], map: "admin_audit_log_created_idx")
+  @@index([targetType, targetId], map: "admin_audit_log_target_idx")
+  @@map("admin_audit_log")
 }

@@ -25,6 +25,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,6 +104,16 @@ export async function POST(req: Request) {
       // Delete the source rows.
       const deleted = await tx.department.deleteMany({
         where: { id: { in: source_ids } },
+      })
+      await recordAudit(tx, guard.session, {
+        action: 'department.merge',
+        targetType: 'department',
+        targetId: target.id,
+        details: {
+          sourceIds: source_ids,
+          movedProfessors: movedProfs.count,
+          movedCourses: movedCourses.count,
+        },
       })
 
       return {

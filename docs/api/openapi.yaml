@@ -363,6 +363,15 @@ components:
           type: array
           items:
             type: string
+        semester_term:
+          type: string
+          enum: [spring, summer, fall]
+          description: Optional. Must be sent together with semester_year; not in the future.
+        semester_year:
+          type: integer
+          minimum: 2000
+          maximum: 2100
+          description: Optional. Must be sent together with semester_term.
         honeypot_field:
           type: string
           description: Must be empty. Bot detection.

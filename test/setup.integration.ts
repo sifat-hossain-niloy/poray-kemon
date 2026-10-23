@@ -45,6 +45,19 @@ vi.mock('@/lib/redis', async () => {
       const had = __redisStore.delete(key)
       return had ? 1 : 0
     }),
+    incr: vi.fn(async (key: string) => {
+      const entry = __redisStore.get(key)
+      const live = entry && (entry.expiresAt === null || Date.now() <= entry.expiresAt)
+      const next = (live ? Number(entry.value) : 0) + 1
+      __redisStore.set(key, { value: String(next), expiresAt: live ? entry.expiresAt : null })
+      return next
+    }),
+    expire: vi.fn(async (key: string, ttlSeconds: number) => {
+      const entry = __redisStore.get(key)
+      if (!entry) return 0
+      entry.expiresAt = Date.now() + ttlSeconds * 1000
+      return 1
+    }),
     ping: vi.fn(async () => 'PONG'),
   }
 

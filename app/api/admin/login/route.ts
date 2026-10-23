@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { setAdminSessionCookie, type AdminRoleLiteral } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 
 // Cookie names NextAuth v5 (Auth.js) writes for the user session. We clear
 // them on successful admin login so a browser can't hold both sessions at
@@ -102,7 +103,14 @@ export async function POST(req: Request) {
 
   const role = admin.role as AdminRoleLiteral
 
-  await db.adminUser.update({ where: { id: admin.id }, data: { lastLogin: new Date() } })
+  await db.$transaction(async (tx) => {
+    await tx.adminUser.update({ where: { id: admin.id }, data: { lastLogin: new Date() } })
+    await recordAudit(
+      tx,
+      { adminId: admin.id, role },
+      { action: 'auth.login', targetType: 'admin_user', targetId: admin.id },
+    )
+  })
   await setAdminSessionCookie(admin.id, role)
   await clearNextAuthCookies()
 

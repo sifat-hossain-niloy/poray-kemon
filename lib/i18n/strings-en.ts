@@ -23,6 +23,7 @@ export const EN: Strings = {
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth: {
     signInWithGoogle: 'Sign in with Google',
+    myActivity: 'My activity',
     signOut: 'Sign out',
     signInToReview: 'Sign in with Google to write a review',
     signInToVote: 'Sign in with Google to vote',
@@ -62,6 +63,7 @@ export const EN: Strings = {
     slurBlock: 'Discriminatory language is not allowed.',
     accusationBlock: 'Personal accusations are not allowed on this platform.',
     duplicateBlock: 'This review has already been submitted.',
+    rateLimited: "You've reached today's review limit. Please try again tomorrow.",
   },
 
   // ── Review display ────────────────────────────────────────────────────────

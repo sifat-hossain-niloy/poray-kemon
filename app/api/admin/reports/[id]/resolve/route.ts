@@ -9,6 +9,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { CACHE_KEYS, deleteCache } from '@/lib/redis'
+import { requireStaff } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { excludeReviewFromAggregate, isCountedInAggregate } from '@/lib/aggregation-mutations'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +24,8 @@ interface RouteCtx {
 }
 
 export async function POST(req: Request, ctx: RouteCtx) {
+  const guard = await requireStaff()
+  if (guard.error) return guard.error
   const { id: idRaw } = await ctx.params
   const reportId = Number(idRaw)
   if (!Number.isInteger(reportId) || reportId <= 0) {
@@ -73,6 +77,12 @@ export async function POST(req: Request, ctx: RouteCtx) {
       // Keep — if the review was auto-hidden via 3-strike, leave it; admin can
       // re-approve it from the queue page separately.
     }
+    await recordAudit(tx, guard.session, {
+      action: action === 'keep' ? 'report.keep' : 'report.remove',
+      targetType: 'report',
+      targetId: reportId,
+      details: { reviewId: report.reviewId },
+    })
   })
 
   await Promise.all([
