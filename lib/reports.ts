@@ -4,6 +4,7 @@
 // is enforced inside the route's transaction.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { createHmac } from 'node:crypto'
 import type { ReportReason } from '@prisma/client'
 
 /** Reasons exposed to the public form. Mirrors the Prisma enum. */
@@ -28,7 +29,15 @@ export function shouldAutoHide(pendingReportCount: number): boolean {
 /** TTL for the Redis dedup key. After this, a user may report the same review again. */
 export const REPORT_DEDUP_TTL_SECONDS = 30 * 24 * 60 * 60 // 30 days
 
-/** Redis key for tracking which (user, review) pairs have already been reported. */
-export function reportDedupKey(userId: string, reviewId: number): string {
-  return `reported:${userId}:${reviewId}`
+/**
+ * Redis key marking that a Google account has already reported a review.
+ * Keyed on the Google `sub`, not users.id, so deleting the account and
+ * signing in again can't re-report the same review toward auto-hide. HMAC'd
+ * so a Redis dump alone doesn't reveal which account reported what.
+ */
+export function reportDedupKey(googleSub: string, reviewId: number, secret: string): string {
+  const digest = createHmac('sha256', secret)
+    .update(`report\0${googleSub}\0${reviewId}`)
+    .digest('hex')
+  return `reported:${digest.slice(0, 32)}`
 }

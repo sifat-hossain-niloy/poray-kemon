@@ -231,6 +231,13 @@
 - [x] Tests: `__tests__/unit/theme.test.ts` (helpers + init-script parity), `__tests__/unit/ThemeToggle.test.tsx` (component).
 - Worktree gotcha: the main repo's `.git/info/exclude` lists `.claude/worktrees/`, so Tailwind's source scan skips worktree files and serves classes from the main checkout. New classes added only in a worktree won't render in its dev server unless you add a temporary `@source` line.
 
+### Abuse limits keyed on the Google sub (`claude/peaceful-lovelace-9a6b79`)
+
+- [x] Daily review quota (`lib/rate-limit.ts`) and report dedup (`lib/reports.ts`) now key on HMAC(`abuseKeySecret()`, Google sub, …) instead of `users.id`, so delete + re-sign-in no longer resets either. No plaintext sub or user id in Redis; fixed Asia/Dhaka day buckets kept.
+- [x] `POST /api/reviews` and `POST /api/reports` load the account's `google_id` up front and return 401 if the session outlived its account.
+- [x] Privacy copy (EN + BN) updated for the report cache entry and what survives deletion.
+- Deploy note: the key format changed, so existing quota counters and report-dedup entries are ignored once (each account could re-report a review it reported in the last 30 days, once).
+
 ---
 
 ## What We Are Building Next

@@ -13,6 +13,7 @@ import {
 } from '@/test/integration-helpers'
 import { __redisStore } from '@/test/setup.integration'
 import { reportDedupKey } from '@/lib/reports'
+import { abuseKeySecret } from '@/lib/rate-limit'
 
 const URL = 'http://localhost/api/reports'
 
@@ -103,8 +104,12 @@ describe('POST /api/reports', () => {
     expect(Object.keys(reports[0]!)).not.toContain('userId')
     expect(Object.keys(reports[0]!)).not.toContain('user_id')
 
-    // Redis dedup key was set
-    expect(__redisStore.has(reportDedupKey(seeded.user1Id, reviewId))).toBe(true)
+    // Redis dedup key was set, keyed on the Google sub and holding no id
+    expect(__redisStore.has(reportDedupKey('gid-1', reviewId, abuseKeySecret()))).toBe(true)
+    for (const key of __redisStore.keys()) {
+      expect(key).not.toContain(seeded.user1Id)
+      expect(key).not.toContain('gid-1')
+    }
   })
 
   // ── Dedup ─────────────────────────────────────────────────────────────────

@@ -22,16 +22,17 @@ describe('dhakaDayBucket', () => {
 })
 
 describe('reviewQuotaKey', () => {
-  const user = '6f1c1a3e-6c7b-4a62-9b50-1a2b3c4d5e6f'
+  const sub = '108234567890123456789'
 
-  it('does not contain the account id', () => {
-    expect(reviewQuotaKey(user, '2026-10-23', 's')).not.toContain(user)
+  it('does not contain the Google sub', () => {
+    expect(reviewQuotaKey(sub, '2026-10-23', 's')).not.toContain(sub)
   })
 
-  it('is stable for the same inputs and differs across days and secrets', () => {
-    const k = reviewQuotaKey(user, '2026-10-23', 's')
-    expect(reviewQuotaKey(user, '2026-10-23', 's')).toBe(k)
-    expect(reviewQuotaKey(user, '2026-10-24', 's')).not.toBe(k)
-    expect(reviewQuotaKey(user, '2026-10-23', 't')).not.toBe(k)
+  it('is stable for the same inputs and differs across subs, days and secrets', () => {
+    const k = reviewQuotaKey(sub, '2026-10-23', 's')
+    expect(reviewQuotaKey(sub, '2026-10-23', 's')).toBe(k)
+    expect(reviewQuotaKey('108234567890123456780', '2026-10-23', 's')).not.toBe(k)
+    expect(reviewQuotaKey(sub, '2026-10-24', 's')).not.toBe(k)
+    expect(reviewQuotaKey(sub, '2026-10-23', 't')).not.toBe(k)
   })
 })
