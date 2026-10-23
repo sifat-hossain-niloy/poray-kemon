@@ -263,6 +263,13 @@ rest. Overlapping files, all in independent hunks: `app/professors/[publicId]/pa
 migrations: #71 (index), #75 (semester columns), #79 (audit table) — no
 ordering dependency between them.
 
+**Verified combined:** all 16 branches were merged in sequence into a
+throwaway branch with no conflicts, and the result passed typecheck, lint,
+143 unit tests, 70 integration tests, `prisma migrate diff` (no drift) and
+`pnpm build`. (Build note: don't run `pnpm build` through
+`dotenv -e .env.local` — it injects `NODE_ENV=development` and the
+`/_global-error` prerender fails with a `useContext` null error.)
+
 **Local verification notes:**
 
 - After any branch switch that changes `prisma/schema.prisma`, run
