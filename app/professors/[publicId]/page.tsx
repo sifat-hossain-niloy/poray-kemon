@@ -1,6 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { auth } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,12 +14,8 @@ import { ShareButton } from '@/components/share/ShareButton'
 import { localeAlternates } from '@/lib/i18n/alternates'
 import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
-import {
-  COUNTED_MODERATION_STATES,
-  ratingDistribution,
-  topTags,
-  type TagCount,
-} from '@/lib/review-insights'
+import { topTags } from '@/lib/review-insights'
+import { loadProfessorInsights } from '@/lib/professor-insights'
 
 // Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
@@ -137,68 +132,18 @@ export default async function ProfessorPage({ params }: PageProps) {
 
   // Everything below is keyed by professor_course id, so collect them once
   // and fan out the per-page queries in parallel.
-  const pcIds = professor.professorCourses.map((pc) => pc.id)
-  const allReviewIds = professor.professorCourses.flatMap((pc) => pc.reviews.map((r) => r.id))
-  const countedWhere = {
-    professorCourseId: { in: pcIds },
-    status: 'visible' as const,
-    moderationStatus: { in: [...COUNTED_MODERATION_STATES] },
-  }
-  const [votes, mySubmissions, tagRows, teachingBuckets] = await Promise.all([
-    viewerId && allReviewIds.length > 0
-      ? db.helpfulVote.findMany({
-          where: { userId: viewerId, reviewId: { in: allReviewIds } },
-          select: { reviewId: true },
-        })
-      : [],
-    // FR-AUTH-05: a signed-in viewer sees which of these courses they've
-    // reviewed. review_submissions holds only (user, professor_course), so
-    // this never touches review content.
-    viewerId && pcIds.length > 0
-      ? db.reviewSubmission.findMany({
-          where: { userId: viewerId, professorCourseId: { in: pcIds } },
-          select: { professorCourseId: true },
-        })
-      : [],
-    pcIds.length > 0
-      ? db.$queryRaw<Array<{ pc_id: number; tag: string; count: number }>>`
-          SELECT r.professor_course_id AS pc_id, t.tag, COUNT(*)::int AS count
-          FROM reviews r, unnest(r.tags) AS t(tag)
-          WHERE r.professor_course_id IN (${Prisma.join(pcIds)})
-            AND r.status = 'visible'
-            AND r.moderation_status IN ('live', 'soft_flagged')
-          GROUP BY 1, 2
-        `
-      : [],
-    pcIds.length > 0
-      ? db.review.groupBy({
-          by: ['teachingQuality'],
-          where: countedWhere,
-          _count: { _all: true },
-        })
-      : [],
-  ])
-  const votedIds = new Set(votes.map((v) => v.reviewId))
-  const reviewedPcIds = new Set(mySubmissions.map((s) => s.professorCourseId))
-
+  const insights = await loadProfessorInsights({
+    professorCourseIds: professor.professorCourses.map((pc) => pc.id),
+    previewReviewIds: professor.professorCourses.flatMap((pc) => pc.reviews.map((r) => r.id)),
+    viewerId,
+  })
+  const votedIds = insights.votedReviewIds
+  const reviewedPcIds = insights.reviewedCourseIds
+  const tagsByPc = insights.tagsByCourse
+  const distribution = insights.distribution
   const knownTags = new Set(Object.keys(strings.tags))
   const tagLabels = strings.tags as Record<string, string>
-  const tagsByPc = new Map<number, TagCount[]>()
-  const professorTagTotals = new Map<string, number>()
-  for (const row of tagRows) {
-    const bucket = tagsByPc.get(row.pc_id) ?? []
-    bucket.push({ tag: row.tag, count: row.count })
-    tagsByPc.set(row.pc_id, bucket)
-    professorTagTotals.set(row.tag, (professorTagTotals.get(row.tag) ?? 0) + row.count)
-  }
-  const professorTopTags = topTags(
-    [...professorTagTotals].map(([tag, count]) => ({ tag, count })),
-    TOP_TAGS_PROFESSOR,
-    knownTags,
-  )
-  const distribution = ratingDistribution(
-    teachingBuckets.map((b) => ({ value: b.teachingQuality, count: b._count._all })),
-  )
+  const professorTopTags = topTags(insights.professorTags, TOP_TAGS_PROFESSOR, knownTags)
 
   // JSON-LD: Person + AggregateRating so Google may show a star rating on
   // the SERP tile. The `name` uses the obfuscated English rendering — never
