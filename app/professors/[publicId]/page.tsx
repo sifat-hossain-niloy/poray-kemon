@@ -14,7 +14,8 @@ import { ShareButton } from '@/components/share/ShareButton'
 import { localeAlternates } from '@/lib/i18n/alternates'
 import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
-import { semesterLabel, semesterTrend } from '@/lib/semester'
+import { semesterLabel } from '@/lib/semester'
+import { loadSemesterTrend } from '@/lib/semester-trend'
 
 // Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
@@ -130,37 +131,8 @@ export default async function ProfessorPage({ params }: PageProps) {
     votes.forEach((v) => votedIds.add(v.reviewId))
   }
 
-  // Semester trend (SRS Phase 2). Counted reviews only — the same set that
-  // feeds the aggregates — grouped by the optional term the reviewer gave.
-  const semesterRows =
-    professor.professorCourses.length > 0
-      ? await db.review.groupBy({
-          by: ['semesterTerm', 'semesterYear'],
-          where: {
-            professorCourseId: { in: professor.professorCourses.map((pc) => pc.id) },
-            status: 'visible',
-            moderationStatus: { in: ['live', 'soft_flagged'] },
-            semesterTerm: { not: null },
-            semesterYear: { not: null },
-          },
-          _avg: { teachingQuality: true },
-          _count: { _all: true },
-        })
-      : []
-  const trend = semesterTrend(
-    semesterRows.flatMap((row) =>
-      row.semesterTerm && row.semesterYear && row._avg.teachingQuality !== null
-        ? [
-            {
-              term: row.semesterTerm,
-              year: row.semesterYear,
-              count: row._count._all,
-              avgTeaching: row._avg.teachingQuality,
-            },
-          ]
-        : [],
-    ),
-  )
+  // Semester trend (SRS Phase 2).
+  const trend = await loadSemesterTrend(professor.professorCourses.map((pc) => pc.id))
   const trendCopy = {
     heading: locale === 'en' ? 'Teaching quality over time' : 'সময়ের সাথে পড়ানোর মান',
     sub:
