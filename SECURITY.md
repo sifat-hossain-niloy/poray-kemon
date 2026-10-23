@@ -29,8 +29,8 @@ Out of scope:
 
 When deploying:
 
-- [ ] `NEXTAUTH_SECRET` and `ADMIN_SESSION_SECRET` are randomly generated
-      (≥ 32 bytes) — never reused from another env
+- [ ] `NEXTAUTH_SECRET`, `ADMIN_SESSION_SECRET` and `ACCOUNT_TOMBSTONE_SECRET`
+      are randomly generated (≥ 32 bytes) — never reused from another env
 - [ ] `.env.production` is `chmod 600` and owned by the deploy user
 - [ ] `docker compose -f docker-compose.prod.yml` is used — never the dev one
 - [ ] Postgres port (5432) is NOT published to the host — only the internal

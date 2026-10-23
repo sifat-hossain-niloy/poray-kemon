@@ -14,6 +14,7 @@ const TABLES_IN_TRUNCATE_ORDER = [
   'helpful_votes',
   'reports',
   'review_submissions',
+  'review_submission_tombstones',
   'reviews',
   'professor_courses',
   'courses',

@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { auth } from '@/lib/auth'
+import { semesterLabel } from '@/lib/semester'
+import { loadSemesterTrend } from '@/lib/semester-trend'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -200,6 +202,16 @@ export default async function ProfessorPage({ params }: PageProps) {
     teachingBuckets.map((b) => ({ value: b.teachingQuality, count: b._count._all })),
   )
 
+  // Semester trend (SRS Phase 2).
+  const trend = await loadSemesterTrend(professor.professorCourses.map((pc) => pc.id))
+  const trendCopy = {
+    heading: locale === 'en' ? 'Teaching quality over time' : 'সময়ের সাথে পড়ানোর মান',
+    sub:
+      locale === 'en'
+        ? 'Average teaching-quality rating per semester, for semesters with at least 2 reviews.'
+        : 'প্রতি সেমিস্টারে পড়ানোর মানের গড় রেটিং (কমপক্ষে ২টি রিভিউ আছে এমন সেমিস্টার)।',
+  }
+
   // JSON-LD: Person + AggregateRating so Google may show a star rating on
   // the SERP tile. The `name` uses the obfuscated English rendering — never
   // the raw one — so no defamation-safety escape hatch is opened.
@@ -299,9 +311,12 @@ export default async function ProfessorPage({ params }: PageProps) {
           <Badge variant="outline">{strings.professor.status[professor.status]}</Badge>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap gap-2">
           <Button render={<Link href={`/review/new?professor=${professor.publicId}`} />}>
             {strings.professor.writeReview}
+          </Button>
+          <Button variant="outline" render={<Link href={`/compare?ids=${professor.publicId}`} />}>
+            {locale === 'en' ? 'Compare' : 'তুলনা করুন'}
           </Button>
         </div>
       </div>
@@ -386,6 +401,39 @@ export default async function ProfessorPage({ params }: PageProps) {
                 </div>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ── Semester trend (SRS Phase 2) ──────────────────────────────────── */}
+      {trend.length > 0 ? (
+        <Card className="mb-8">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{trendCopy.heading}</CardTitle>
+            <p className="text-xs text-muted-foreground">{trendCopy.sub}</p>
+          </CardHeader>
+          <CardContent>
+            <ol className="space-y-1.5">
+              {trend.map((point) => (
+                <li key={`${point.term}-${point.year}`} className="flex items-center gap-3 text-xs">
+                  <span className="w-24 shrink-0 text-muted-foreground">
+                    {semesterLabel(point.term, point.year, locale)}
+                  </span>
+                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                    <span
+                      className="block h-full rounded-full bg-primary"
+                      style={{ width: `${(point.avgTeaching / 5) * 100}%` }}
+                    />
+                  </span>
+                  <span className="w-8 shrink-0 text-right font-semibold tabular-nums">
+                    {point.avgTeaching.toFixed(1)}
+                  </span>
+                  <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">
+                    ({point.count.toLocaleString(numberLocale)})
+                  </span>
+                </li>
+              ))}
+            </ol>
           </CardContent>
         </Card>
       ) : null}
@@ -487,6 +535,8 @@ export default async function ProfessorPage({ params }: PageProps) {
                             helpfulCount: r.helpfulCount,
                             submittedAt: r.submittedAt,
                             moderationStatus: r.moderationStatus,
+                            semesterTerm: r.semesterTerm,
+                            semesterYear: r.semesterYear,
                           }}
                           userVoted={votedIds.has(r.id)}
                           professorPublicId={professor.publicId}

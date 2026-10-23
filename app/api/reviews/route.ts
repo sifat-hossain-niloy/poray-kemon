@@ -30,6 +30,8 @@ import { parseDepartmentName } from '@/lib/department-parser'
 import { deleteCache, CACHE_KEYS } from '@/lib/redis'
 import { getStrings } from '@/lib/i18n'
 import { checkEligibility, formatRequiredSuffixes } from '@/lib/eligibility'
+import { tombstoneKey, tombstoneSecret } from '@/lib/account-tombstone'
+import { consumeReviewQuota, hasReviewQuota } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -330,6 +332,16 @@ export async function POST(req: Request) {
     }
   }
 
+  // ── 4b. Daily per-account quota (NFR-SEC-07) ─────────────────────────────
+  // Checked before any find-or-create so a throttled request leaves no
+  // auto-created departments/professors/courses behind.
+  if (!(await hasReviewQuota(userId))) {
+    return NextResponse.json(
+      { error: (await getStrings()).reviewResponse.rateLimited, code: 'RATE_LIMITED' },
+      { status: 429 },
+    )
+  }
+
   // ── 5. Resolve department → professor → course → professor_course ────────
   //
   // We resolve the department first because the professor's row needs a
@@ -417,6 +429,28 @@ export async function POST(req: Request) {
         throw new DuplicateSubmissionError()
       }
 
+      // 5a'. Same guard across account deletion: an earlier, deleted account
+      // with this Google sub left a tombstone for each course it reviewed.
+      // Without the secret no deletion can have happened (DELETE /api/me
+      // refuses), so there is nothing to check against.
+      const submitter = await tx.user.findUnique({
+        where: { id: userId },
+        select: { googleId: true },
+      })
+      if (!submitter) {
+        throw new AccountGoneError()
+      }
+      const secret = tombstoneSecret()
+      if (secret) {
+        const tombstone = await tx.reviewSubmissionTombstone.findUnique({
+          where: { keyHash: tombstoneKey(secret, submitter.googleId, professorCourse.id) },
+          select: { keyHash: true },
+        })
+        if (tombstone) {
+          throw new DuplicateSubmissionError()
+        }
+      }
+
       // 5b. INSERT reviews — no user_id column on this table
       await tx.review.create({
         data: {
@@ -428,6 +462,8 @@ export async function POST(req: Request) {
           wouldRecommend: data.would_recommend,
           reviewText: data.review_text?.trim() || null,
           tags: data.tags,
+          semesterTerm: data.semester_term ?? null,
+          semesterYear: data.semester_year ?? null,
           moderationStatus: verdict.kind === 'soft_flag' ? 'soft_flagged' : 'live',
           moderationReason: verdict.kind === 'soft_flag' ? verdict.reason : null,
         },
@@ -461,6 +497,13 @@ export async function POST(req: Request) {
       `
     })
   } catch (err) {
+    // A session cookie can outlive its account (deleted from another device).
+    if (err instanceof AccountGoneError) {
+      return NextResponse.json(
+        { error: (await getStrings()).errors.unauthorized, code: 'UNAUTHENTICATED' },
+        { status: 401 },
+      )
+    }
     if (err instanceof DuplicateSubmissionError) {
       return NextResponse.json(
         {
@@ -483,8 +526,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: (await getStrings()).errors.serverError }, { status: 500 })
   }
 
-  // ── 6. Cache invalidation ─────────────────────────────────────────────────
+  // ── 6. Quota + cache invalidation ─────────────────────────────────────────
   await Promise.all([
+    consumeReviewQuota(userId),
     deleteCache(CACHE_KEYS.siteStats),
     deleteCache(CACHE_KEYS.professorProfile(professor.publicId)),
   ])
@@ -508,5 +552,12 @@ class DuplicateSubmissionError extends Error {
   constructor() {
     super('duplicate')
     this.name = 'DuplicateSubmissionError'
+  }
+}
+
+class AccountGoneError extends Error {
+  constructor() {
+    super('account gone')
+    this.name = 'AccountGoneError'
   }
 }

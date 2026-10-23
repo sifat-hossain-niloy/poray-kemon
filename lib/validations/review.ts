@@ -1,4 +1,10 @@
+import { SEMESTER_TERMS, isFutureSemester } from '@/lib/semester'
 import { z } from 'zod'
+import { BN } from '@/lib/i18n/strings-bn'
+
+// The tag vocabulary is the keys of the strings bundle. Anything else would
+// render as a raw string on every review card, so it is rejected here.
+const KNOWN_TAGS: ReadonlySet<string> = new Set(Object.keys(BN.tags))
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Review submission schema
@@ -50,6 +56,10 @@ export const reviewSubmitSchema = z
     // Recommendation
     would_recommend: z.coerce.boolean(),
 
+    // Optional semester the course was taken in — both or neither
+    semester_term: z.enum(SEMESTER_TERMS).optional(),
+    semester_year: z.coerce.number().int().min(2000).max(2100).optional(),
+
     // Optional free text — if provided must be 20–500 chars
     review_text: z
       .string()
@@ -58,8 +68,12 @@ export const reviewSubmitSchema = z
       .optional()
       .or(z.literal('')),
 
-    // Multi-select tags
-    tags: z.array(z.string()).max(10).default([]),
+    // Multi-select tags — known keys only, duplicates collapsed
+    tags: z
+      .array(z.string().refine((t) => KNOWN_TAGS.has(t), { message: 'Unknown tag' }))
+      .max(10)
+      .default([])
+      .transform((tags) => [...new Set(tags)]),
 
     // Honeypot — must be empty. Bots fill this in.
     honeypot_field: z.string().max(0, 'Bot detected').default(''),
@@ -87,6 +101,17 @@ export const reviewSubmitSchema = z
       return !text || text.length >= 20
     },
     { message: 'রিভিউ কমপক্ষে ২০ অক্ষরের হতে হবে', path: ['review_text'] },
+  )
+  .refine((data) => (data.semester_term === undefined) === (data.semester_year === undefined), {
+    message: 'semester_term and semester_year must be provided together',
+    path: ['semester_year'],
+  })
+  .refine(
+    (data) =>
+      data.semester_term === undefined ||
+      data.semester_year === undefined ||
+      !isFutureSemester(data.semester_term, data.semester_year),
+    { message: 'Semester cannot be in the future', path: ['semester_year'] },
   )
 
 export type ReviewSubmitInput = z.infer<typeof reviewSubmitSchema>

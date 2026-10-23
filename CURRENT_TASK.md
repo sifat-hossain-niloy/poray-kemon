@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Staff roles + separate admin/moderator login
-**Last updated:** July 2026 (Session 15)
-**Active branches:** `feat/admin-moderator-roles` (PR open, stacked on `feat/vercel-deployment-prep`)
+**Phase:** SRS gap-closing + Phase 2 features (Session 16, 15 PRs open for review)
+**Last updated:** October 2026 (Session 16)
+**Active branches:** see the Session 16 table below. Each branch is cut from `main` @ `1ee48d5` and is independent unless noted.
 
 ---
 
@@ -235,21 +235,10 @@
 
 ## What We Are Building Next
 
-After these PRs are merged, the next steps are:
-
-### Step 1 — Department typeahead + add-as-new
-
-Same pattern as professor: scoped search endpoint, debounced typeahead,
-"Add 'CSE - Computer Science and Engineering' as a new department"
-fallback with smart abbreviation/full-name parsing on the server.
-The review POST handler will auto-create a Department row when
-`department_id` is absent.
-
-### Step 2 — Admin merge tool
-
-Once add-as-new is live for departments, admins need a "Merge
-departments" action so duplicates ("CSE" + "Computer Science and
-Engineering" + "C.S.E.") can be collapsed into one canonical row.
+1. Review and merge the Session 16 PRs (see order above).
+2. Account deletion with a re-registration tombstone.
+3. Dark mode (system preference, no cookie) with a visual pass.
+4. Phase 3 candidates: public read-only API, professor response system.
 
 ---
 

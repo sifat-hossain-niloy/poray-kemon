@@ -98,19 +98,20 @@ also rotate it in Vercel env vars — nothing else will remind you.
 
 Complete list — everything the app reads is here.
 
-| Name                   | Where     | Purpose                                                                                                                                                                                 |
-| ---------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`         | required  | Postgres, pooled (Neon PgBouncer). Prisma runtime uses this.                                                                                                                            |
-| `DIRECT_URL`           | required  | Postgres, direct. Prisma **migrate** uses this — pooler is incompatible with migrations. Locally set equal to `DATABASE_URL`.                                                           |
-| `REDIS_URL`            | required  | Upstash `redis://…` URL                                                                                                                                                                 |
-| `NEXTAUTH_SECRET`      | required  | Random 32+ chars. Rotating invalidates all user sessions.                                                                                                                               |
-| `NEXTAUTH_URL`         | required  | `https://poraykemon.com` in prod, `http://localhost:3000` local                                                                                                                         |
-| `GOOGLE_CLIENT_ID`     | required  | From Google Cloud Console                                                                                                                                                               |
-| `GOOGLE_CLIENT_SECRET` | required  | From Google Cloud Console                                                                                                                                                               |
-| `ADMIN_SESSION_SECRET` | required  | Random 64+ chars — signs the admin session cookie (Web Crypto HMAC). Rotating logs out every admin & moderator immediately.                                                             |
-| `ADMIN_SEED_PASSWORD`  | seed only | Overrides the seed default `changeme123`. Not read at runtime.                                                                                                                          |
-| `NEXT_PUBLIC_SITE_URL` | required  | Canonical URL — used for OG tags, sitemap                                                                                                                                               |
-| `DATABASE_URL_TEST`    | dev/test  | Points at the isolated test Postgres. **Required** for `pnpm test` (integration setup in [test/global-setup.integration.ts](../../test/global-setup.integration.ts) throws without it). |
+| Name                       | Where     | Purpose                                                                                                                                                                                                                                 |
+| -------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`             | required  | Postgres, pooled (Neon PgBouncer). Prisma runtime uses this.                                                                                                                                                                            |
+| `DIRECT_URL`               | required  | Postgres, direct. Prisma **migrate** uses this — pooler is incompatible with migrations. Locally set equal to `DATABASE_URL`.                                                                                                           |
+| `REDIS_URL`                | required  | Upstash `redis://…` URL                                                                                                                                                                                                                 |
+| `NEXTAUTH_SECRET`          | required  | Random 32+ chars. Rotating invalidates all user sessions.                                                                                                                                                                               |
+| `NEXTAUTH_URL`             | required  | `https://poraykemon.com` in prod, `http://localhost:3000` local                                                                                                                                                                         |
+| `GOOGLE_CLIENT_ID`         | required  | From Google Cloud Console                                                                                                                                                                                                               |
+| `GOOGLE_CLIENT_SECRET`     | required  | From Google Cloud Console                                                                                                                                                                                                               |
+| `ADMIN_SESSION_SECRET`     | required  | Random 64+ chars — signs the admin session cookie (Web Crypto HMAC). Rotating logs out every admin & moderator immediately.                                                                                                             |
+| `ACCOUNT_TOMBSTONE_SECRET` | required  | Random 32+ chars — keys the review-submission tombstones written on account deletion. **Never rotate**: old tombstones stop matching, so deleted accounts could review the same courses again. Without it `DELETE /api/me` returns 503. |
+| `ADMIN_SEED_PASSWORD`      | seed only | Overrides the seed default `changeme123`. Not read at runtime.                                                                                                                                                                          |
+| `NEXT_PUBLIC_SITE_URL`     | required  | Canonical URL — used for OG tags, sitemap                                                                                                                                                                                               |
+| `DATABASE_URL_TEST`        | dev/test  | Points at the isolated test Postgres. **Required** for `pnpm test` (integration setup in [test/global-setup.integration.ts](../../test/global-setup.integration.ts) throws without it).                                                 |
 
 ### Where they live
 
@@ -126,6 +127,12 @@ Complete list — everything the app reads is here.
 3. Redeploy (Vercel auto-redeploys on env change, but confirm).
 4. If it's `NEXTAUTH_SECRET` or `ADMIN_SESSION_SECRET`, note that every
    existing session becomes invalid on the next request.
+
+`ACCOUNT_TOMBSTONE_SECRET` is the exception: do not rotate it. If it leaks,
+the exposure is that someone who also has a database dump and a deleted
+user's Google `sub` can test which professor+courses that account reviewed
+(not which reviews it wrote), the same thing `review_submissions` shows for a
+live account.
 
 ---
 

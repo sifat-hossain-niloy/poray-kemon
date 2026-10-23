@@ -2,6 +2,7 @@ import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import type { Metadata } from 'next'
 import { db } from '@/lib/db'
 import { getLocale, getStrings } from '@/lib/i18n'
+import { plural } from '@/lib/i18n/plural'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { obfuscateName } from '@/lib/name-obfuscation'
@@ -143,12 +144,7 @@ export default async function ProfessorsPage() {
                         <span className="text-muted-foreground"> / 5</span>
                       </span>
                       <span className="text-muted-foreground">
-                        {nfmt.format(r.reviewCount)}{' '}
-                        {locale === 'en'
-                          ? strings.stats.totalReviews(r.reviewCount).replace(/^\d[\d,]*\s*/, '')
-                          : r.reviewCount === 1
-                            ? 'রিভিউ'
-                            : 'রিভিউ'}
+                        {nfmt.format(r.reviewCount)} {plural(r.reviewCount, strings.stats.reviews)}
                       </span>
                     </div>
                   </CardContent>

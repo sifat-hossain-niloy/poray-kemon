@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { departmentCreateSchema } from '@/lib/validations/admin'
 import { slugify } from '@/lib/slug'
 
@@ -42,15 +43,24 @@ export async function POST(req: Request, ctx: RouteCtx) {
   const slug = (d.slug && d.slug.trim()) || slugify(d.shortName || d.nameEn) || null
 
   try {
-    const created = await db.department.create({
-      data: {
-        universityId,
-        nameEn: d.nameEn,
-        nameBn: d.nameBn || null,
-        shortName: d.shortName || null,
-        slug,
-      },
-      select: { id: true, slug: true },
+    const created = await db.$transaction(async (tx) => {
+      const dept = await tx.department.create({
+        data: {
+          universityId,
+          nameEn: d.nameEn,
+          nameBn: d.nameBn || null,
+          shortName: d.shortName || null,
+          slug,
+        },
+        select: { id: true, slug: true },
+      })
+      await recordAudit(tx, guard.session, {
+        action: 'department.create',
+        targetType: 'department',
+        targetId: dept.id,
+        details: { universityId, nameEn: d.nameEn },
+      })
+      return dept
     })
     return NextResponse.json({ ok: true, department: created }, { status: 201 })
   } catch (err) {

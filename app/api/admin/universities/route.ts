@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { universityCreateSchema } from '@/lib/validations/admin'
 
 export const dynamic = 'force-dynamic'
@@ -22,17 +23,26 @@ export async function POST(req: Request) {
   const data = parsed.data
 
   try {
-    const created = await db.university.create({
-      data: {
-        nameEn: data.nameEn,
-        nameBn: data.nameBn || null,
-        shortName: data.shortName,
-        slug: data.slug,
-        locationCity: data.locationCity || null,
-        type: data.type,
-        websiteUrl: data.websiteUrl || null,
-      },
-      select: { id: true, slug: true },
+    const created = await db.$transaction(async (tx) => {
+      const uni = await tx.university.create({
+        data: {
+          nameEn: data.nameEn,
+          nameBn: data.nameBn || null,
+          shortName: data.shortName,
+          slug: data.slug,
+          locationCity: data.locationCity || null,
+          type: data.type,
+          websiteUrl: data.websiteUrl || null,
+        },
+        select: { id: true, slug: true },
+      })
+      await recordAudit(tx, guard.session, {
+        action: 'university.create',
+        targetType: 'university',
+        targetId: uni.id,
+        details: { shortName: data.shortName, nameEn: data.nameEn },
+      })
+      return uni
     })
     return NextResponse.json({ ok: true, university: created }, { status: 201 })
   } catch (err) {

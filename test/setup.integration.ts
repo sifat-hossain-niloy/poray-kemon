@@ -45,6 +45,19 @@ vi.mock('@/lib/redis', async () => {
       const had = __redisStore.delete(key)
       return had ? 1 : 0
     }),
+    incr: vi.fn(async (key: string) => {
+      const entry = __redisStore.get(key)
+      const live = entry && (entry.expiresAt === null || Date.now() <= entry.expiresAt)
+      const next = (live ? Number(entry.value) : 0) + 1
+      __redisStore.set(key, { value: String(next), expiresAt: live ? entry.expiresAt : null })
+      return next
+    }),
+    expire: vi.fn(async (key: string, ttlSeconds: number) => {
+      const entry = __redisStore.get(key)
+      if (!entry) return 0
+      entry.expiresAt = Date.now() + ttlSeconds * 1000
+      return 1
+    }),
     ping: vi.fn(async () => 'PONG'),
   }
 
@@ -89,6 +102,10 @@ vi.mock('@/lib/auth', () => ({
   signOut: vi.fn(),
   handlers: { GET: vi.fn(), POST: vi.fn() },
 }))
+
+// DELETE /api/me refuses to run without a tombstone secret, and POST
+// /api/reviews only checks tombstones when one is set.
+process.env.ACCOUNT_TOMBSTONE_SECRET ??= 'integration-test-tombstone-secret-0123456789abcdef'
 
 beforeEach(() => {
   __redisStore.clear()

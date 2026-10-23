@@ -14,6 +14,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse } from 'next/server'
+import { requireStaff } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { universityRequestResolveSchema } from '@/lib/validations/admin'
@@ -26,6 +28,8 @@ interface RouteCtx {
 }
 
 export async function POST(req: Request, ctx: RouteCtx) {
+  const guard = await requireStaff()
+  if (guard.error) return guard.error
   const { id: idRaw } = await ctx.params
   const id = Number(idRaw)
   if (!Number.isInteger(id) || id <= 0) {
@@ -96,6 +100,17 @@ export async function POST(req: Request, ctx: RouteCtx) {
           resolvedAt: new Date(),
         },
         select: { id: true, status: true, resolvedAt: true },
+      })
+
+      await recordAudit(tx, guard.session, {
+        action: action === 'approve' ? 'university_request.approve' : 'university_request.reject',
+        targetType: 'university_request',
+        targetId: request.id,
+        details: {
+          nameEn: request.nameEn,
+          ...(createdUniversity ? { universityId: createdUniversity.id } : {}),
+          ...(admin_note?.trim() ? { adminNote: admin_note.trim() } : {}),
+        },
       })
 
       return { request: resolved, university: createdUniversity }

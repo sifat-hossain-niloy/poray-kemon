@@ -8,6 +8,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { POST } from '@/app/api/reviews/route'
 import { db } from '@/lib/db'
+import { REVIEWS_PER_DAY } from '@/lib/rate-limit'
+import { __redisStore } from '@/test/setup.integration'
 import {
   cleanDb,
   jsonPost,
@@ -146,6 +148,108 @@ describe('POST /api/reviews', () => {
     expect(await db.reviewSubmission.count()).toBe(1)
   })
 
+  // ── Daily quota (NFR-SEC-07) ──────────────────────────────────────────────
+
+  it(`allows ${REVIEWS_PER_DAY} reviews a day, then 429s without writing`, async () => {
+    mockSession(seeded.user1Id)
+    for (let i = 0; i < REVIEWS_PER_DAY; i++) {
+      const res = await POST(
+        jsonPost(
+          URL,
+          validBody({
+            university_id: seeded.uniId,
+            department_id: seeded.deptId,
+            course_code: `CSE ${100 + i}`,
+            course_name: `Course ${i}`,
+          }),
+        ),
+      )
+      expect(res.status).toBe(201)
+    }
+
+    const over = await POST(
+      jsonPost(
+        URL,
+        validBody({
+          university_id: seeded.uniId,
+          department_id: seeded.deptId,
+          course_code: 'CSE 999',
+          course_name: 'One Too Many',
+        }),
+      ),
+    )
+    expect(over.status).toBe(429)
+    expect((await over.json()).code).toBe('RATE_LIMITED')
+    expect(await db.review.count()).toBe(REVIEWS_PER_DAY)
+    // Throttled before find-or-create, so no orphan course was made.
+    expect(await db.course.count({ where: { courseCode: 'CSE 999' } })).toBe(0)
+
+    // Another account is unaffected.
+    mockSession(seeded.user2Id)
+    const other = await POST(
+      jsonPost(URL, validBody({ university_id: seeded.uniId, department_id: seeded.deptId })),
+    )
+    expect(other.status).toBe(201)
+  })
+
+  it('does not count rejected submissions against the quota', async () => {
+    mockSession(seeded.user1Id)
+    const body = validBody({ university_id: seeded.uniId, department_id: seeded.deptId })
+    expect((await POST(jsonPost(URL, body))).status).toBe(201)
+    for (let i = 0; i < REVIEWS_PER_DAY; i++) {
+      expect((await POST(jsonPost(URL, body))).status).toBe(409)
+    }
+    const fresh = await POST(
+      jsonPost(URL, validBody({ ...body, course_code: 'CSE 404', course_name: 'Still Allowed' })),
+    )
+    expect(fresh.status).toBe(201)
+  })
+
+  it('never puts the account id into a Redis key', async () => {
+    mockSession(seeded.user1Id)
+    await POST(
+      jsonPost(URL, validBody({ university_id: seeded.uniId, department_id: seeded.deptId })),
+    )
+    const keys = [...__redisStore.keys()].filter((k) => k.startsWith('rl:review:'))
+    expect(keys).toHaveLength(1)
+    expect(keys[0]).not.toContain(seeded.user1Id)
+  })
+
+  // ── Tag vocabulary ────────────────────────────────────────────────────────
+
+  it('rejects unknown tags with 400', async () => {
+    mockSession(seeded.user1Id)
+    const res = await POST(
+      jsonPost(
+        URL,
+        validBody({
+          university_id: seeded.uniId,
+          department_id: seeded.deptId,
+          tags: ['বোর্ডে_বোঝান', '<script>alert(1)</script>'],
+        }),
+      ),
+    )
+    expect(res.status).toBe(400)
+    expect(await db.review.count()).toBe(0)
+  })
+
+  it('collapses duplicate tags', async () => {
+    mockSession(seeded.user1Id)
+    const res = await POST(
+      jsonPost(
+        URL,
+        validBody({
+          university_id: seeded.uniId,
+          department_id: seeded.deptId,
+          tags: ['বোর্ডে_বোঝান', 'বোর্ডে_বোঝান', 'সহজলভ্য'],
+        }),
+      ),
+    )
+    expect(res.status).toBe(201)
+    const review = await db.review.findFirstOrThrow()
+    expect(review.tags).toEqual(['বোর্ডে_বোঝান', 'সহজলভ্য'])
+  })
+
   it('allows two different users to review the same professor+course', async () => {
     const body = {
       ...validBody(),
@@ -168,6 +272,44 @@ describe('POST /api/reviews', () => {
   })
 
   // ── Honeypot ──────────────────────────────────────────────────────────────
+
+  // ── Semester (optional, both-or-neither) ──────────────────────────────────
+
+  it('stores an optional semester', async () => {
+    mockSession(seeded.user1Id)
+    const res = await POST(
+      jsonPost(
+        URL,
+        validBody({
+          university_id: seeded.uniId,
+          department_id: seeded.deptId,
+          semester_term: 'fall',
+          semester_year: 2025,
+        }),
+      ),
+    )
+    expect(res.status).toBe(201)
+    const review = await db.review.findFirstOrThrow()
+    expect(review.semesterTerm).toBe('fall')
+    expect(review.semesterYear).toBe(2025)
+  })
+
+  it.each([
+    ['a term without a year', { semester_term: 'spring' }],
+    ['a year without a term', { semester_year: 2025 }],
+    ['an unknown term', { semester_term: 'autumn', semester_year: 2025 }],
+    ['a future semester', { semester_term: 'fall', semester_year: new Date().getFullYear() + 1 }],
+  ])('rejects %s with 400', async (_label, extra) => {
+    mockSession(seeded.user1Id)
+    const res = await POST(
+      jsonPost(
+        URL,
+        validBody({ university_id: seeded.uniId, department_id: seeded.deptId, ...extra }),
+      ),
+    )
+    expect(res.status).toBe(400)
+    expect(await db.review.count()).toBe(0)
+  })
 
   it('rejects a bot submission via honeypot field with 400', async () => {
     mockSession(seeded.user1Id)

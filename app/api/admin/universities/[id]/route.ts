@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/admin-auth'
+import { recordAudit } from '@/lib/audit'
 import { universityUpdateSchema } from '@/lib/validations/admin'
 
 export const dynamic = 'force-dynamic'
@@ -42,7 +43,15 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   if (d.websiteUrl !== undefined) data.websiteUrl = d.websiteUrl || null
 
   try {
-    await db.university.update({ where: { id }, data })
+    await db.$transaction(async (tx) => {
+      await tx.university.update({ where: { id }, data })
+      await recordAudit(tx, guard.session, {
+        action: 'university.update',
+        targetType: 'university',
+        targetId: id,
+        details: { changes: parsed.data },
+      })
+    })
     return NextResponse.json({ ok: true })
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {

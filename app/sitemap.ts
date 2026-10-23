@@ -52,6 +52,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...localized('/faq', { changeFrequency: 'monthly', priority: 0.6 }),
     ...localized('/about', { changeFrequency: 'monthly', priority: 0.5 }),
     ...localized('/guidelines', { changeFrequency: 'monthly', priority: 0.5 }),
+    ...localized('/privacy', { changeFrequency: 'yearly', priority: 0.3 }),
   ]
 
   const blogPosts = getAllPosts()

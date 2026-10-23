@@ -14,15 +14,16 @@ export const EN: Strings = {
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   stats: {
-    totalReviews: (n: number) => `${n.toLocaleString('en-US')} reviews`,
-    totalProfessors: (n: number) => `${n.toLocaleString('en-US')} professors`,
-    totalUniversities: (n: number) => `${n.toLocaleString('en-US')} universities`,
-    totalCourses: (n: number) => `${n.toLocaleString('en-US')} courses`,
+    reviews: { one: 'review', other: 'reviews' },
+    professorsRated: { one: 'professor rated', other: 'professors rated' },
+    universities: { one: 'university', other: 'universities' },
+    coursesReviewed: { one: 'course reviewed', other: 'courses reviewed' },
   },
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth: {
     signInWithGoogle: 'Sign in with Google',
+    myActivity: 'My activity',
     signOut: 'Sign out',
     signInToReview: 'Sign in with Google to write a review',
     signInToVote: 'Sign in with Google to vote',
@@ -62,6 +63,7 @@ export const EN: Strings = {
     slurBlock: 'Discriminatory language is not allowed.',
     accusationBlock: 'Personal accusations are not allowed on this platform.',
     duplicateBlock: 'This review has already been submitted.',
+    rateLimited: "You've reached today's review limit. Please try again tomorrow.",
   },
 
   // ── Review display ────────────────────────────────────────────────────────
@@ -175,6 +177,29 @@ export const EN: Strings = {
     themeSystem: 'System',
     themeLight: 'Light',
     themeDark: 'Dark',
+  },
+
+  // ── Account deletion ──────────────────────────────────────────────────────
+  account: {
+    deleteHeading: 'Delete your account',
+    deleteIntro:
+      'You can permanently delete your account and everything linked to it. Reviews you wrote stay up, because no review is linked to any account.',
+    signInToDelete: 'Sign in first to delete your account.',
+    deleteButton: 'Delete my account',
+    confirmTitle: 'Before you delete your account',
+    confirmRemoved:
+      'Deleted: your Google identifier, display name, email domain, the record of which courses you reviewed, your helpful votes and your university requests.',
+    confirmKept:
+      "Kept: the reviews you wrote. We don't know which ones are yours, so we can't find them to delete them.",
+    confirmNoRereview:
+      "If you sign in again with the same Google account, you won't be able to review the professors and courses you reviewed before. Other courses are open as normal.",
+    confirmCheckbox: 'I understand a deleted account cannot be restored.',
+    confirmButton: 'Delete permanently',
+    cancel: 'Cancel',
+    deleting: 'Deleting…',
+    deleted: 'Your account has been deleted. Signing you out…',
+    failed: "Your account couldn't be deleted. Please try again in a moment.",
+    unavailable: "Account deletion isn't available right now. Please try again later.",
   },
 
   // ── Errors ────────────────────────────────────────────────────────────────

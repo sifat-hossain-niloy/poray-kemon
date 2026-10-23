@@ -8,6 +8,7 @@ import { ShareButton } from '@/components/share/ShareButton'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 import { obfuscateName } from '@/lib/name-obfuscation'
 import { useLocale, useStrings } from '@/lib/i18n/client'
+import { semesterLabel, type SemesterTerm } from '@/lib/semester'
 
 // Display data for one review. Note: NO user fields exist — by design.
 export interface ReviewCardData {
@@ -22,6 +23,8 @@ export interface ReviewCardData {
   helpfulCount: number
   submittedAt: Date
   moderationStatus: 'live' | 'soft_flagged' | 'flagged_hidden' | 'deleted'
+  semesterTerm?: SemesterTerm | null
+  semesterYear?: number | null
 }
 
 // Context around a review. Everything optional so the professor page (which
@@ -145,9 +148,16 @@ export function ReviewCard({ review, userVoted = false, professorPublicId, conte
         ) : null}
 
         <div className="flex items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
-          <time dateTime={review.submittedAt.toISOString()}>
-            {dateFormatter.format(review.submittedAt)}
-          </time>
+          <span className="flex flex-wrap items-center gap-x-2">
+            {review.semesterTerm && review.semesterYear ? (
+              <span className="font-medium text-foreground/80">
+                {semesterLabel(review.semesterTerm, review.semesterYear, locale)}
+              </span>
+            ) : null}
+            <time dateTime={review.submittedAt.toISOString()}>
+              {dateFormatter.format(review.submittedAt)}
+            </time>
+          </span>
           <div className="flex items-center gap-3">
             {sharePath ? (
               <ShareButton

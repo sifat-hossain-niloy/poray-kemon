@@ -198,6 +198,14 @@ export function SearchBox({ variant = 'hero', placeholder, autoFocus = false }: 
                       <div className="truncate text-sm font-semibold">{r.title}</div>
                       <div className="truncate text-xs text-muted-foreground">{r.subtitle}</div>
                     </div>
+                    {r.stats && r.stats.overallScore !== null ? (
+                      <span className="shrink-0 text-xs font-semibold tabular-nums">
+                        <span className="text-yellow-500" aria-hidden>
+                          ★
+                        </span>{' '}
+                        {r.stats.overallScore.toFixed(1)}
+                      </span>
+                    ) : null}
                     <Badge variant={KIND_VARIANT[r.kind]} className="shrink-0 text-[10px]">
                       {KIND_LABELS[r.kind]}
                     </Badge>
