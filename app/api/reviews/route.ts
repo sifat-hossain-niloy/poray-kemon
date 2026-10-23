@@ -289,6 +289,20 @@ export async function POST(req: Request) {
     )
   }
 
+  // ── 3b. The account behind the session ──────────────────────────────────
+  // A session cookie can outlive its account (deleted from another device).
+  // The Google sub keys the daily quota so delete + re-sign-in doesn't reset it.
+  const account = await db.user.findUnique({
+    where: { id: userId },
+    select: { googleId: true, emailDomain: true },
+  })
+  if (!account) {
+    return NextResponse.json(
+      { error: (await getStrings()).errors.unauthorized, code: 'UNAUTHENTICATED' },
+      { status: 401 },
+    )
+  }
+
   // ── 4. Per-university email-domain eligibility gate ──────────────────────
   //
   // Some universities restrict review authorship to students of that uni
@@ -306,15 +320,12 @@ export async function POST(req: Request) {
       gateUniversityId = prof?.universityId
     }
     if (gateUniversityId) {
-      const [uni, user] = await Promise.all([
-        db.university.findUnique({
-          where: { id: gateUniversityId },
-          select: { shortName: true, emailDomainSuffixes: true },
-        }),
-        db.user.findUnique({ where: { id: userId }, select: { emailDomain: true } }),
-      ])
+      const uni = await db.university.findUnique({
+        where: { id: gateUniversityId },
+        select: { shortName: true, emailDomainSuffixes: true },
+      })
       if (uni && uni.emailDomainSuffixes.length > 0) {
-        const verdict = checkEligibility(user?.emailDomain ?? null, uni.emailDomainSuffixes)
+        const verdict = checkEligibility(account.emailDomain, uni.emailDomainSuffixes)
         if (!verdict.eligible) {
           return NextResponse.json(
             {
@@ -335,7 +346,7 @@ export async function POST(req: Request) {
   // ── 4b. Daily per-account quota (NFR-SEC-07) ─────────────────────────────
   // Checked before any find-or-create so a throttled request leaves no
   // auto-created departments/professors/courses behind.
-  if (!(await hasReviewQuota(userId))) {
+  if (!(await hasReviewQuota(account.googleId))) {
     return NextResponse.json(
       { error: (await getStrings()).reviewResponse.rateLimited, code: 'RATE_LIMITED' },
       { status: 429 },
@@ -528,7 +539,7 @@ export async function POST(req: Request) {
 
   // ── 6. Quota + cache invalidation ─────────────────────────────────────────
   await Promise.all([
-    consumeReviewQuota(userId),
+    consumeReviewQuota(account.googleId),
     deleteCache(CACHE_KEYS.siteStats),
     deleteCache(CACHE_KEYS.professorProfile(professor.publicId)),
   ])

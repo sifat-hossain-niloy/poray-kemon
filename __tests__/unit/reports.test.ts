@@ -25,16 +25,29 @@ describe('shouldAutoHide', () => {
 })
 
 describe('reportDedupKey', () => {
-  it('namespaces user + review', () => {
-    expect(reportDedupKey('abc-123', 42)).toBe('reported:abc-123:42')
+  const sub = '108234567890123456789'
+
+  it('is namespaced and holds neither the sub nor the review id in the clear', () => {
+    const k = reportDedupKey(sub, 42, 's')
+    expect(k).toMatch(/^reported:[0-9a-f]{32}$/)
+    expect(k).not.toContain(sub)
+    expect(k).not.toContain(':42')
   })
 
-  it('produces distinct keys for distinct users', () => {
-    expect(reportDedupKey('u1', 1)).not.toBe(reportDedupKey('u2', 1))
+  it('produces distinct keys for distinct accounts', () => {
+    expect(reportDedupKey('s1', 1, 's')).not.toBe(reportDedupKey('s2', 1, 's'))
   })
 
   it('produces distinct keys for distinct reviews', () => {
-    expect(reportDedupKey('u1', 1)).not.toBe(reportDedupKey('u1', 2))
+    expect(reportDedupKey('s1', 1, 's')).not.toBe(reportDedupKey('s1', 2, 's'))
+  })
+
+  it('does not collide on concatenation ("1", 23) vs ("12", 3)', () => {
+    expect(reportDedupKey('1', 23, 's')).not.toBe(reportDedupKey('12', 3, 's'))
+  })
+
+  it('depends on the secret', () => {
+    expect(reportDedupKey(sub, 1, 's')).not.toBe(reportDedupKey(sub, 1, 't'))
   })
 })
 

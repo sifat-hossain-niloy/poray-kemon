@@ -4,6 +4,8 @@
 // The two properties that matter:
 //   * deleting an account must not reopen the one-review-per-course guard for
 //     the same Google account (tombstones), and
+//   * the per-account abuse limits (daily review quota, report dedup) follow
+//     the Google sub, so delete + re-sign-in doesn't reset them, and
 //   * nothing written on deletion can be joined back to `reviews`.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -11,8 +13,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DELETE } from '@/app/api/me/route'
 import { POST as postReview } from '@/app/api/reviews/route'
 import { POST as toggleHelpful } from '@/app/api/reviews/[id]/helpful/route'
+import { POST as postReport } from '@/app/api/reports/route'
 import { db } from '@/lib/db'
 import { tombstoneKey } from '@/lib/account-tombstone'
+import { REVIEWS_PER_DAY } from '@/lib/rate-limit'
+import { __redisStore } from '@/test/setup.integration'
 import {
   cleanDb,
   jsonPost,
@@ -212,6 +217,96 @@ describe('DELETE /api/me', () => {
     const res = await review(seeded.user1Id, 'CSE 301')
     expect(res.status).toBe(401)
     expect(await db.review.count()).toBe(0)
+  })
+
+  // ── Abuse limits survive deletion ─────────────────────────────────────────
+
+  async function report(userId: string, reviewId: number): Promise<Response> {
+    mockSession(userId)
+    return postReport(
+      jsonPost('http://localhost/api/reports', { review_id: reviewId, reason: 'fake' }),
+    )
+  }
+
+  it('delete → sign in again → today’s review quota is still used up', async () => {
+    for (let i = 0; i < REVIEWS_PER_DAY; i++) {
+      expect((await review(seeded.user1Id, `CSE ${401 + i}`)).status).toBe(201)
+    }
+    expect((await deleteAccount(seeded.user1Id)).status).toBe(200)
+
+    const newUserId = await signInAgain('gid-1')
+    const res = await review(newUserId, 'CSE 499')
+    expect(res.status).toBe(429)
+    expect((await res.json()).code).toBe('RATE_LIMITED')
+    expect(await db.review.count()).toBe(REVIEWS_PER_DAY)
+
+    // A different Google account still has its own quota.
+    expect((await review(seeded.user2Id, 'CSE 499')).status).toBe(201)
+  })
+
+  it('delete → sign in again → the partial quota carries over, not resets', async () => {
+    for (let i = 0; i < REVIEWS_PER_DAY - 1; i++) {
+      expect((await review(seeded.user1Id, `CSE ${401 + i}`)).status).toBe(201)
+    }
+    expect((await deleteAccount(seeded.user1Id)).status).toBe(200)
+
+    const newUserId = await signInAgain('gid-1')
+    expect((await review(newUserId, 'CSE 498')).status).toBe(201)
+    expect((await review(newUserId, 'CSE 499')).status).toBe(429)
+  })
+
+  it('delete → sign in again → reporting the same review again is deduplicated', async () => {
+    expect((await review(seeded.user3Id, 'CSE 301')).status).toBe(201)
+    const target = await db.review.findFirstOrThrow({ select: { id: true } })
+
+    expect((await report(seeded.user1Id, target.id)).status).toBe(201)
+    expect((await deleteAccount(seeded.user1Id)).status).toBe(200)
+
+    const second = await signInAgain('gid-1')
+    expect((await report(second, target.id)).status).toBe(201) // idempotent
+    expect((await deleteAccount(second)).status).toBe(200)
+
+    const third = await signInAgain('gid-1')
+    expect((await report(third, target.id)).status).toBe(201)
+
+    // One account, one report: nowhere near the auto-hide threshold.
+    expect(await db.report.count({ where: { reviewId: target.id } })).toBe(1)
+    const after = await db.review.findUniqueOrThrow({
+      where: { id: target.id },
+      select: { moderationStatus: true },
+    })
+    expect(after.moderationStatus).toBe('live')
+
+    // Other accounts can still report it.
+    expect((await report(seeded.user2Id, target.id)).status).toBe(201)
+    expect(await db.report.count({ where: { reviewId: target.id } })).toBe(2)
+  })
+
+  it('a session that outlived its account cannot file a report', async () => {
+    expect((await review(seeded.user3Id, 'CSE 301')).status).toBe(201)
+    const target = await db.review.findFirstOrThrow({ select: { id: true } })
+    expect((await deleteAccount(seeded.user1Id)).status).toBe(200)
+
+    expect((await report(seeded.user1Id, target.id)).status).toBe(401)
+    expect(await db.report.count()).toBe(0)
+  })
+
+  it('no Redis key holds a users.id or a Google sub in the clear', async () => {
+    expect((await review(seeded.user3Id, 'CSE 301')).status).toBe(201)
+    const target = await db.review.findFirstOrThrow({ select: { id: true } })
+    expect((await report(seeded.user1Id, target.id)).status).toBe(201)
+    expect((await deleteAccount(seeded.user1Id)).status).toBe(200)
+    const newUserId = await signInAgain('gid-1')
+    expect((await report(newUserId, target.id)).status).toBe(201)
+
+    const keys = [...__redisStore.keys()]
+    expect(keys.some((k) => k.startsWith('rl:review:'))).toBe(true)
+    expect(keys.some((k) => k.startsWith('reported:'))).toBe(true)
+    for (const key of keys) {
+      for (const id of [seeded.user1Id, seeded.user3Id, newUserId, 'gid-1', 'gid-3']) {
+        expect(key).not.toContain(id)
+      }
+    }
   })
 
   // ── Helpful votes ─────────────────────────────────────────────────────────

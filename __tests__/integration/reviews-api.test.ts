@@ -205,7 +205,7 @@ describe('POST /api/reviews', () => {
     expect(fresh.status).toBe(201)
   })
 
-  it('never puts the account id into a Redis key', async () => {
+  it('never puts the account id or Google sub into a Redis key', async () => {
     mockSession(seeded.user1Id)
     await POST(
       jsonPost(URL, validBody({ university_id: seeded.uniId, department_id: seeded.deptId })),
@@ -213,6 +213,7 @@ describe('POST /api/reviews', () => {
     const keys = [...__redisStore.keys()].filter((k) => k.startsWith('rl:review:'))
     expect(keys).toHaveLength(1)
     expect(keys[0]).not.toContain(seeded.user1Id)
+    expect(keys[0]).not.toContain('gid-1')
   })
 
   // ── Tag vocabulary ────────────────────────────────────────────────────────

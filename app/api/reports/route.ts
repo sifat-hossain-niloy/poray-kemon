@@ -7,12 +7,14 @@
 //       authenticated session is the simplest defence available to MVP.
 //
 // Anti-abuse:
-//   - Redis dedup key `reported:{userId}:{reviewId}` with 30-day TTL prevents
-//     one user from spamming the same review's report count. Returns 200
-//     idempotently on a duplicate.
+//   - Redis dedup key `reported:{HMAC(sub, reviewId)}` with 30-day TTL
+//     prevents one Google account from spamming the same review's report
+//     count, including by deleting the account and signing in again (same
+//     sub, new users.id). Returns 201 idempotently on a duplicate.
 //   - The `reports` table itself stays user-anonymous — we do NOT write the
 //     reporter's user_id to PostgreSQL. The Redis dedup is the only place
-//     the (user, review) link exists, and it expires after 30 days.
+//     the (account, review) link exists, it needs the secret to test, and it
+//     expires after 30 days.
 //
 // Auto-hide: when the count of pending reports on a review reaches
 //            AUTO_HIDE_THRESHOLD (3), the review's `moderation_status` is set
@@ -31,6 +33,7 @@ import {
   reportDedupKey,
   REPORT_DEDUP_TTL_SECONDS,
 } from '@/lib/reports'
+import { abuseKeySecret } from '@/lib/rate-limit'
 import { getStrings } from '@/lib/i18n'
 
 export const dynamic = 'force-dynamic'
@@ -63,20 +66,30 @@ export async function POST(req: Request) {
   }
   const { review_id: reviewId, reason, details } = parsed.data
 
-  // ── 3. Review must exist & not already deleted ────────────────────────────
-  const review = await db.review.findUnique({
-    where: { id: reviewId },
-    select: { id: true, status: true, moderationStatus: true, professorCourseId: true },
-  })
+  // ── 3. Account still exists; review must exist & not already deleted ─────
+  const [account, review] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { googleId: true } }),
+    db.review.findUnique({
+      where: { id: reviewId },
+      select: { id: true, status: true, moderationStatus: true, professorCourseId: true },
+    }),
+  ])
+  // A session cookie can outlive its account (deleted from another device).
+  if (!account) {
+    return NextResponse.json(
+      { error: (await getStrings()).errors.unauthorized, code: 'UNAUTHENTICATED' },
+      { status: 401 },
+    )
+  }
   if (!review || review.status === 'deleted') {
     return NextResponse.json({ error: 'Review not found' }, { status: 404 })
   }
 
   // ── 4. Dedup via Redis ────────────────────────────────────────────────────
   // acquireOnce is atomic SET NX with a TTL. When REDIS_URL is unset or Redis
-  // is down it returns true (assume first-time) — the SQL side of the app will
-  // still catch straight-up duplicates via the (user_id, review_id) unique key.
-  const dedupKey = reportDedupKey(userId, reviewId)
+  // is down it returns true (assume first-time). There is no SQL-side backstop
+  // (reports has no user_id), so an outage lets duplicates through.
+  const dedupKey = reportDedupKey(account.googleId, reviewId, abuseKeySecret())
   const isFirstReport = await acquireOnce(dedupKey, REPORT_DEDUP_TTL_SECONDS)
 
   if (!isFirstReport) {
