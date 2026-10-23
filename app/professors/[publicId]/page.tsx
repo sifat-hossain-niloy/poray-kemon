@@ -311,9 +311,12 @@ export default async function ProfessorPage({ params }: PageProps) {
           <Badge variant="outline">{strings.professor.status[professor.status]}</Badge>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap gap-2">
           <Button render={<Link href={`/review/new?professor=${professor.publicId}`} />}>
             {strings.professor.writeReview}
+          </Button>
+          <Button variant="outline" render={<Link href={`/compare?ids=${professor.publicId}`} />}>
+            {locale === 'en' ? 'Compare' : 'তুলনা করুন'}
           </Button>
         </div>
       </div>
