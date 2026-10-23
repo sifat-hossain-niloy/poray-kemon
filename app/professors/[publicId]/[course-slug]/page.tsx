@@ -20,6 +20,15 @@ import { ReviewCard } from '@/components/review/ReviewCard'
 import { obfuscateName } from '@/lib/name-obfuscation'
 import { isProfessorPublicId } from '@/lib/public-id'
 import { getLocale, getStrings } from '@/lib/i18n'
+import {
+  filterParams,
+  filterWhere,
+  hasActiveFilters,
+  parseCourseReviewFilters,
+  NO_FILTERS,
+  type CourseReviewFilters,
+} from '@/lib/course-review-filters'
+import { loadCourseAlternatives } from '@/lib/course-alternatives'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +38,7 @@ type SortKey = 'helpful' | 'recent'
 
 interface PageProps {
   params: Promise<{ publicId: string; 'course-slug': string }>
-  searchParams: Promise<{ sort?: string; page?: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
 async function resolveProfessor(param: string) {
@@ -63,11 +72,37 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
   const [strings, locale] = await Promise.all([getStrings(), getLocale()])
   const breadcrumbUni = locale === 'en' ? 'Universities' : 'বিশ্ববিদ্যালয়'
   const prevLabel = locale === 'en' ? '← Previous' : '← আগের'
+  const fx =
+    locale === 'en'
+      ? {
+          filter: 'Show',
+          wouldTake: 'Would take again',
+          wouldNotTake: "Wouldn't take again",
+          withText: 'Written reviews',
+          clear: 'Clear filters',
+          noMatches: 'No reviews match these filters.',
+          alsoTaughtBy: 'Also teaching this course',
+          noReviews: 'No reviews yet',
+        }
+      : {
+          filter: 'দেখান',
+          wouldTake: 'আবার নেবেন',
+          wouldNotTake: 'আবার নেবেন না',
+          withText: 'লিখিত রিভিউ',
+          clear: 'ফিল্টার মুছুন',
+          noMatches: 'এই ফিল্টারের সাথে মেলে এমন কোনো রিভিউ নেই।',
+          alsoTaughtBy: 'এই কোর্সটি আরও যারা পড়ান',
+          noReviews: 'এখনো কোনো রিভিউ নেই',
+        }
   const nextLabel = locale === 'en' ? 'Next →' : 'পরের →'
   const { publicId, 'course-slug': courseSlug } = await params
-  const { sort: sortRaw, page: pageRaw } = await searchParams
-  const sort = parseSort(sortRaw)
-  const page = parsePage(pageRaw)
+  const rawSearch = await searchParams
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
+  const sort = parseSort(one(rawSearch.sort))
+  const page = parsePage(one(rawSearch.page))
+  const knownTags = new Set(Object.keys(strings.tags))
+  const tagLabels = strings.tags as Record<string, string>
+  const filters = parseCourseReviewFilters(rawSearch, knownTags)
 
   const session = await auth()
   const viewerId = session?.user?.id ?? null
@@ -103,13 +138,14 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
   if (!professorCourse) notFound()
 
   // ── Reviews — paged + sorted ─────────────────────────────────────────────
-  const where = { professorCourseId: professorCourse.id, status: 'visible' as const }
+  const baseWhere = { professorCourseId: professorCourse.id, status: 'visible' as const }
+  const where = { ...baseWhere, ...filterWhere(filters) }
   const orderBy =
     sort === 'recent'
       ? [{ submittedAt: 'desc' as const }]
       : [{ helpfulCount: 'desc' as const }, { submittedAt: 'desc' as const }]
 
-  const [reviews, totalReviews] = await Promise.all([
+  const [reviews, totalReviews, allReviews, courseTags, alternatives] = await Promise.all([
     db.review.findMany({
       where,
       orderBy,
@@ -117,7 +153,21 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
       take: PAGE_SIZE,
     }),
     db.review.count({ where }),
+    // The header always reports the unfiltered total.
+    hasActiveFilters(filters) ? db.review.count({ where: baseWhere }) : null,
+    // Offer only tags that actually occur on this course's counted reviews.
+    db.$queryRaw<Array<{ tag: string; count: number }>>`
+      SELECT t.tag, COUNT(*)::int AS count
+      FROM reviews r, unnest(r.tags) AS t(tag)
+      WHERE r.professor_course_id = ${professorCourse.id}
+        AND r.status = 'visible'
+        AND r.moderation_status IN ('live', 'soft_flagged')
+      GROUP BY t.tag
+      ORDER BY count DESC, t.tag
+    `,
+    loadCourseAlternatives(professorCourse.courseId, professor.id),
   ])
+  const tagOptions = courseTags.filter((t) => knownTags.has(t.tag))
 
   // Batched per-viewer vote lookup
   const votedIds = new Set<number>()
@@ -133,9 +183,10 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
   // Capture into local consts so TypeScript can narrow through the closure
   const professorPublicId = professor.publicId
   const profHref = `/professors/${professorPublicId}`
-  function pageHref(p: number, s: SortKey = sort) {
+  function pageHref(p: number, s: SortKey = sort, f: CourseReviewFilters = filters) {
     const sp = new URLSearchParams()
     if (s !== 'helpful') sp.set('sort', s)
+    for (const [k, v] of filterParams(f)) sp.set(k, v)
     if (p > 1) sp.set('page', String(p))
     const qs = sp.toString()
     return `/professors/${professorPublicId}/${courseSlug}${qs ? `?${qs}` : ''}`
@@ -166,7 +217,7 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
           {professorCourse.course.courseName}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {strings.professor.reviewCount(totalReviews)} ·{' '}
+          {strings.professor.reviewCount(allReviews ?? totalReviews)} ·{' '}
           {professor.nameBn ?? obfuscateName(professor.nameEn)}
         </p>
       </div>
@@ -202,6 +253,45 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
         </CardContent>
       </Card>
 
+      {/* ── Who else teaches this course ──────────────────────────────────── */}
+      {alternatives.length > 0 ? (
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{fx.alsoTaughtBy}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-border">
+              {alternatives.map((alt) => (
+                <li key={alt.publicId}>
+                  <Link
+                    href={
+                      alt.reviewCount > 0
+                        ? `/professors/${alt.publicId}/${courseSlug}`
+                        : `/professors/${alt.publicId}`
+                    }
+                    className="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary"
+                  >
+                    <span className="min-w-0 truncate font-medium">{alt.displayName}</span>
+                    <span className="flex shrink-0 items-baseline gap-2 tabular-nums text-xs text-muted-foreground">
+                      {alt.overallScore !== null ? (
+                        <span className="text-sm font-semibold text-foreground">
+                          {alt.overallScore.toFixed(1)}
+                        </span>
+                      ) : null}
+                      <span>
+                        {alt.reviewCount > 0
+                          ? strings.professor.reviewCount(alt.reviewCount)
+                          : fx.noReviews}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* ── Sort tabs ────────────────────────────────────────────────────── */}
       <div className="mb-4 flex items-center gap-2">
         <SortLink href={pageHref(1, 'helpful')} active={sort === 'helpful'}>
@@ -221,11 +311,57 @@ export default async function ProfessorCoursePage({ params, searchParams }: Page
         </div>
       </div>
 
+      {/* ── Filters ──────────────────────────────────────────────────────── */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs text-muted-foreground">{fx.filter}</span>
+        <SortLink
+          href={pageHref(1, sort, {
+            ...filters,
+            recommend: filters.recommend === 'yes' ? null : 'yes',
+          })}
+          active={filters.recommend === 'yes'}
+        >
+          {fx.wouldTake}
+        </SortLink>
+        <SortLink
+          href={pageHref(1, sort, {
+            ...filters,
+            recommend: filters.recommend === 'no' ? null : 'no',
+          })}
+          active={filters.recommend === 'no'}
+        >
+          {fx.wouldNotTake}
+        </SortLink>
+        <SortLink
+          href={pageHref(1, sort, { ...filters, withText: !filters.withText })}
+          active={filters.withText}
+        >
+          {fx.withText}
+        </SortLink>
+        {tagOptions.map(({ tag }) => (
+          <SortLink
+            key={tag}
+            href={pageHref(1, sort, { ...filters, tag: filters.tag === tag ? null : tag })}
+            active={filters.tag === tag}
+          >
+            {tagLabels[tag] ?? tag}
+          </SortLink>
+        ))}
+        {hasActiveFilters(filters) ? (
+          <Link
+            href={pageHref(1, sort, NO_FILTERS)}
+            className="ml-1 text-xs text-primary hover:underline"
+          >
+            {fx.clear}
+          </Link>
+        ) : null}
+      </div>
+
       {/* ── Reviews list ─────────────────────────────────────────────────── */}
       {reviews.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            {strings.reviewDisplay.noReviews}
+            {hasActiveFilters(filters) ? fx.noMatches : strings.reviewDisplay.noReviews}
           </CardContent>
         </Card>
       ) : (
