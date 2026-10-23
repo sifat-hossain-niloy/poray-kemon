@@ -258,7 +258,8 @@ shown), plus unit and/or integration tests. CI is green on all of them.
 cookie behaviour). #67 first if you want demo data while reviewing the
 rest. Overlapping files, all in independent hunks: `app/professors/[publicId]/page.tsx`
 (#70, #75, #77), `app/api/reviews/route.ts` + `lib/validations/review.ts`
-(#74, #75), `lib/redis.ts` (#71), `app/page.tsx` + `lib/redis.ts` (#71, #82). Three PRs add
+(#74, #75), `app/page.tsx` +
+`lib/redis.ts` (#71, #82). Three PRs add
 migrations: #71 (index), #75 (semester columns), #79 (audit table) — no
 ordering dependency between them.
 
