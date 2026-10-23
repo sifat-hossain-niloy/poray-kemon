@@ -82,7 +82,7 @@ export const PRIVACY_EN: PrivacyContent = {
     {
       heading: 'Keeping and deleting data',
       paragraphs: [
-        'Account data is kept while your account exists. You can delete your account yourself at the bottom of this page. Deleting it removes its identifier, display name, email domain, review-submission records, helpful votes and university requests. Helpful counts on the reviews you voted for go down accordingly.',
+        'Account data is kept while your account exists. You can delete your account yourself from your activity page (`/me`). Deleting it removes its identifier, display name, email domain, review-submission records, helpful votes and university requests. Helpful counts on the reviews you voted for go down accordingly.',
         'Reviews are not deleted with the account. Because nothing links a review to its author, we cannot find "your" reviews to delete them, and neither can anyone else. A review can be removed through the report process if it breaks the guidelines.',
         'One thing is kept, so that deleting an account can’t be used to review the same course twice. For each professor and course the account had reviewed, we keep a one-way hash, made with a secret key, of your Google identifier combined with that professor and course. It stores no account, no course, no review and no date, so it cannot be matched to any review. Its only use: if you sign in again with the same Google account, you can’t review those same professors and courses again. Other courses are open as normal.',
         'Cache entries that stop duplicate reports are not removed early. They expire on their own within 30 days and refer to an account that no longer exists.',
@@ -159,7 +159,7 @@ export const PRIVACY_BN: PrivacyContent = {
     {
       heading: 'ডেটা রাখা ও মুছে ফেলা',
       paragraphs: [
-        'অ্যাকাউন্ট যতদিন আছে, অ্যাকাউন্টের ডেটা ততদিন থাকে। এই পেজের নিচ থেকে আপনি নিজেই অ্যাকাউন্ট মুছে ফেলতে পারেন। অ্যাকাউন্ট মুছলে তার আইডেন্টিফায়ার, প্রদর্শনের নাম, ইমেইল ডোমেইন, রিভিউ-সাবমিশনের রেকর্ড, সহায়ক ভোট এবং বিশ্ববিদ্যালয়ের অনুরোধ মুছে যায়। আপনি যেসব রিভিউতে সহায়ক ভোট দিয়েছিলেন, সেগুলোর ভোট সংখ্যাও সেই অনুযায়ী কমে যায়।',
+        'অ্যাকাউন্ট যতদিন আছে, অ্যাকাউন্টের ডেটা ততদিন থাকে। আপনার কার্যক্রমের পেজ (`/me`) থেকে আপনি নিজেই অ্যাকাউন্ট মুছে ফেলতে পারেন। অ্যাকাউন্ট মুছলে তার আইডেন্টিফায়ার, প্রদর্শনের নাম, ইমেইল ডোমেইন, রিভিউ-সাবমিশনের রেকর্ড, সহায়ক ভোট এবং বিশ্ববিদ্যালয়ের অনুরোধ মুছে যায়। আপনি যেসব রিভিউতে সহায়ক ভোট দিয়েছিলেন, সেগুলোর ভোট সংখ্যাও সেই অনুযায়ী কমে যায়।',
         'অ্যাকাউন্টের সাথে রিভিউ মোছে না। কোনো রিভিউ লেখকের সাথে যুক্ত না থাকায় "আপনার" রিভিউ খুঁজে বের করে মোছা আমাদের পক্ষে সম্ভব নয়, অন্য কারো পক্ষেও নয়। নির্দেশিকা ভাঙলে রিপোর্ট প্রক্রিয়ার মাধ্যমে রিভিউ সরানো যায়।',
         'অ্যাকাউন্ট মুছে একই কোর্সে দ্বিতীয়বার রিভিউ দেওয়া যাতে না যায়, সেজন্য একটি জিনিস রাখা হয়। অ্যাকাউন্টটি যেসব শিক্ষক ও কোর্সে রিভিউ দিয়েছিল, তার প্রতিটির জন্য আপনার Google আইডেন্টিফায়ার ও সেই শিক্ষক-কোর্স মিলিয়ে, একটি গোপন চাবি দিয়ে তৈরি একমুখী হ্যাশ রাখা হয়। এতে কোনো অ্যাকাউন্ট, কোর্স, রিভিউ বা তারিখ থাকে না, তাই কোনো রিভিউয়ের সাথে মেলানো যায় না। এর একমাত্র কাজ: একই Google অ্যাকাউন্ট দিয়ে আবার সাইন ইন করলে আগের ওই শিক্ষক ও কোর্সগুলোতে আবার রিভিউ দেওয়া যাবে না। অন্য কোর্সে স্বাভাবিকভাবেই দেওয়া যাবে।',
         'ডুপ্লিকেট রিপোর্ট আটকানোর ক্যাশ এন্ট্রিগুলো আগেভাগে মোছা হয় না। সেগুলো ৩০ দিনের মধ্যে নিজে থেকেই মুছে যায় এবং এমন একটি অ্যাকাউন্টকে নির্দেশ করে যার আর অস্তিত্ব নেই।',

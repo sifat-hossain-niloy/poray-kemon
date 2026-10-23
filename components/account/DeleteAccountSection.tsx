@@ -2,8 +2,7 @@
 
 // Self-serve account deletion. The confirmation is an inline panel rather
 // than window.confirm so it can spell out what is deleted, what stays, and
-// that previously reviewed courses stay closed. Self-contained so it can sit
-// on /privacy now and on /me once that page lands.
+// that previously reviewed courses stay closed. Rendered on /me.
 
 import { useId, useState } from 'react'
 import { signIn, signOut, useSession } from 'next-auth/react'
