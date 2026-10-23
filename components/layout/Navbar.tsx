@@ -98,6 +98,9 @@ export function Navbar({ isStaff = false }: { isStaff?: boolean }) {
                       </DropdownMenuLabel>
                     </DropdownMenuGroup>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem render={<Link href="/me" />}>
+                      {strings.auth.myActivity}
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => signOut()}>
                       {strings.auth.signOut}
                     </DropdownMenuItem>

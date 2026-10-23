@@ -23,6 +23,7 @@ export const EN: Strings = {
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth: {
     signInWithGoogle: 'Sign in with Google',
+    myActivity: 'My activity',
     signOut: 'Sign out',
     signInToReview: 'Sign in with Google to write a review',
     signInToVote: 'Sign in with Google to vote',

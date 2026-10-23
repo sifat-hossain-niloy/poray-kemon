@@ -21,6 +21,7 @@ export const BN = {
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth: {
     signInWithGoogle: 'Google দিয়ে সাইন ইন করুন',
+    myActivity: 'আমার কার্যক্রম',
     signOut: 'সাইন আউট',
     signInToReview: 'রিভিউ দিতে Google দিয়ে সাইন ইন করুন',
     signInToVote: 'ভোট দিতে Google দিয়ে সাইন ইন করুন',
