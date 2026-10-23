@@ -175,7 +175,7 @@ export function SearchBox({ variant = 'hero', placeholder, autoFocus = false }: 
         <div
           id="search-results-listbox"
           role="listbox"
-          className="absolute left-0 right-0 z-50 mt-2 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg ring-1 ring-black/5"
+          className="absolute left-0 right-0 z-50 mt-2 max-h-96 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5"
         >
           {visibleResults.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">

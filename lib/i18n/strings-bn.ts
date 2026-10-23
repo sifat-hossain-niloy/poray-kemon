@@ -170,6 +170,10 @@ export const BN = {
     language: 'ভাষা',
     languageBangla: 'বাংলা',
     languageEnglish: 'English',
+    theme: 'থিম',
+    themeSystem: 'সিস্টেম',
+    themeLight: 'লাইট',
+    themeDark: 'ডার্ক',
   },
 
   // ── Errors ────────────────────────────────────────────────────────────────

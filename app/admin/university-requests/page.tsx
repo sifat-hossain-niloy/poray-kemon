@@ -85,7 +85,10 @@ export default async function AdminUniversityRequestsPage({ searchParams }: Page
                         <span className="text-base font-semibold">{r.nameEn}</span>
                         <Badge variant="secondary">{r.type}</Badge>
                         {r.status === 'pending' ? (
-                          <Badge variant="outline" className="border-amber-300 text-amber-700">
+                          <Badge
+                            variant="outline"
+                            className="border-amber-300 text-amber-700 dark:border-amber-500/40 dark:text-amber-400"
+                          >
                             Pending
                           </Badge>
                         ) : r.status === 'approved' ? (

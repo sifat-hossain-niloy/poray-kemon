@@ -354,7 +354,7 @@ export default async function ProfessorPage({ params }: PageProps) {
                           aria-hidden
                         >
                           <span
-                            className="block h-full rounded-full bg-yellow-500"
+                            className="block h-full rounded-full bg-rating"
                             style={{ width: `${distribution.widths[star - 1] ?? 0}%` }}
                           />
                         </span>

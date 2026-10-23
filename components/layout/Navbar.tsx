@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SearchBox } from '@/components/search/SearchBox'
 import { LanguageToggle } from '@/components/i18n/LanguageToggle'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { useStrings } from '@/lib/i18n/client'
 
 export function Navbar({ isStaff = false }: { isStaff?: boolean }) {
@@ -52,7 +53,10 @@ export function Navbar({ isStaff = false }: { isStaff?: boolean }) {
             <SearchBox variant="compact" />
           </div>
 
-          <LanguageToggle />
+          <div className="flex shrink-0 items-center gap-1">
+            <ThemeToggle />
+            <LanguageToggle />
+          </div>
 
           {/* Hide the user-flow CTAs entirely for staff sessions — staff use
               the admin bar below and shouldn't see "Sign in with Google" or

@@ -255,7 +255,7 @@ export function DepartmentTypeahead({
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
                             {h.status === 'unverified' ? (
-                              <span className="mr-2 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
+                              <span className="mr-2 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">
                                 {t.unverifiedBadge}
                               </span>
                             ) : null}

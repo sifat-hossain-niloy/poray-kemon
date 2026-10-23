@@ -222,6 +222,15 @@
 - [x] **Docs**: SRS §4.5 gains **FR-MOD-06/07/08**; §6 `admin_users` redoc'd with the new columns and partial index; §7 route map adds login + `/admin/users`; §8 API spec adds the users endpoints + login body shape. Version bumped to 1.7. Build-log rows added.
 - [x] Local `DIRECT_URL` added to `.env.local`; `test/global-setup.integration.ts` sets `DIRECT_URL` for the integration DB; `.env.example` updated to note it's now required.
 
+### Dark mode (`claude/gracious-herschel-28a3a4`)
+
+- [x] `lib/theme.ts` — pure `parseThemePreference` / `resolveTheme` + `THEME_INIT_SCRIPT`, an inline `<head>` script in the root layout that sets `.dark` on `<html>` before first paint and tracks OS changes.
+- [x] Preference (`system | light | dark`) lives in `localStorage` key `pk_theme` only — never a cookie (NFR-PRIV-02). Default is `prefers-color-scheme`.
+- [x] `components/theme/ThemeToggle.tsx` — icon dropdown in the navbar next to the language toggle.
+- [x] `--rating` token (`text-rating` / `bg-rating`) for stars + distribution bars; amber badges/notices got `dark:` variants; `color-scheme` follows the theme so native controls match.
+- [x] Tests: `__tests__/unit/theme.test.ts` (helpers + init-script parity), `__tests__/unit/ThemeToggle.test.tsx` (component).
+- Worktree gotcha: the main repo's `.git/info/exclude` lists `.claude/worktrees/`, so Tailwind's source scan skips worktree files and serves classes from the main checkout. New classes added only in a worktree won't render in its dev server unless you add a temporary `@source` line.
+
 ---
 
 ## What We Are Building Next

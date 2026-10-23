@@ -136,7 +136,11 @@ export function ShareButton({ path, title, text, variant = 'icon', ariaLabel, cl
           <span>{strings.share.twitter}</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={copyLink}>
-          {copied ? <Check size={14} className="text-emerald-600" /> : <LinkIcon size={14} />}
+          {copied ? (
+            <Check size={14} className="text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <LinkIcon size={14} />
+          )}
           <span>{copied ? strings.share.copied : strings.share.copyLink}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
