@@ -14,17 +14,31 @@ import { cn } from '@/lib/utils'
 
 // Hind Siliguri covers Bengali AND Latin natively — use it as --font-sans so
 // every shadcn component renders cleanly in either locale.
+//
+// preload: false — preloading made every page fetch all weights x both
+// subsets (~250 KB, more than all of the page's JS) at high priority before
+// first paint, pushing mobile LCP to ~3 s. Without it the browser fetches
+// only the faces a page renders (unicode-range picks Bengali vs Latin).
+//
+// display: 'optional' — with 'swap', a font arriving late re-renders the
+// Bangla <h1> and Chrome records that as a new, later LCP (measured 2.7 s
+// on /bn professor pages). 'optional' keeps the system fallback for that
+// view if the font isn't ready within ~100 ms, and the now-cached font is
+// used from the next navigation on. Weight 300 was never used and is gone.
 const hindSiliguri = Hind_Siliguri({
   variable: '--font-sans',
   subsets: ['bengali', 'latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  display: 'swap',
+  weight: ['400', '500', '600', '700'],
+  display: 'optional',
+  preload: false,
 })
 
+// Only staff pages and a few inline <code> spans use mono — never preload it.
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
   display: 'swap',
+  preload: false,
 })
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://poraykemon.com'

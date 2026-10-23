@@ -19,7 +19,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createHmac } from 'node:crypto'
-import { redis } from '@/lib/redis'
+import { liveClient } from '@/lib/redis'
 
 /** Enough for a full semester's course load in one sitting. */
 export const REVIEWS_PER_DAY = 6
