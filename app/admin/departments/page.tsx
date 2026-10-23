@@ -89,7 +89,10 @@ export default async function AdminDepartmentsPage({ searchParams }: PageProps) 
                         <span className="text-base font-semibold">{d.shortName ?? d.nameEn}</span>
                         <Badge variant="secondary">{d.university.shortName}</Badge>
                         {d.status === 'unverified' ? (
-                          <Badge variant="outline" className="border-amber-300 text-amber-700">
+                          <Badge
+                            variant="outline"
+                            className="border-amber-300 text-amber-700 dark:border-amber-500/40 dark:text-amber-400"
+                          >
                             Unverified
                           </Badge>
                         ) : (

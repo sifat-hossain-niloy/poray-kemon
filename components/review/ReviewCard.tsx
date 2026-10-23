@@ -185,7 +185,7 @@ function StarsInline({ value, label }: { value: number; label: string }) {
     <span className="inline-flex items-center gap-1.5">
       <span className="text-muted-foreground">{label}:</span>
       <span aria-label={`${label} ${value} out of 5`}>
-        <span className="text-yellow-500">{'★'.repeat(value)}</span>
+        <span className="text-rating">{'★'.repeat(value)}</span>
         <span className="text-muted-foreground/40">{'★'.repeat(5 - value)}</span>
       </span>
     </span>

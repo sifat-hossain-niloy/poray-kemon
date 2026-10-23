@@ -602,7 +602,7 @@ function RatingRow({
             aria-label={`${n} star${n > 1 ? 's' : ''}`}
             className="text-2xl leading-none transition-colors"
           >
-            <span className={n <= value ? 'text-yellow-500' : 'text-muted-foreground/40'}>★</span>
+            <span className={n <= value ? 'text-rating' : 'text-muted-foreground/40'}>★</span>
           </button>
         ))}
       </div>

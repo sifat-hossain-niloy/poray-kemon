@@ -173,6 +173,10 @@ export const EN: Strings = {
     language: 'Language',
     languageBangla: 'বাংলা',
     languageEnglish: 'English',
+    theme: 'Theme',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
   },
 
   // ── Account deletion ──────────────────────────────────────────────────────

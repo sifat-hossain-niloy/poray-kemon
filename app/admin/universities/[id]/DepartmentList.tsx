@@ -272,7 +272,10 @@ export function DepartmentList({ universityId, departments }: Props) {
                             <span className="text-muted-foreground font-normal">— {d.nameEn}</span>
                           ) : null}
                           {d.status === 'unverified' ? (
-                            <Badge variant="outline" className="text-amber-700 border-amber-300">
+                            <Badge
+                              variant="outline"
+                              className="border-amber-300 text-amber-700 dark:border-amber-500/40 dark:text-amber-400"
+                            >
                               Pending review
                             </Badge>
                           ) : null}
