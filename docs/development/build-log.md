@@ -606,6 +606,20 @@ As features are completed, add them here for quick lookup.
 | Separate login pages | `app/admin/login/page.tsx`, `app/moderator/login/page.tsx`, `components/admin/StaffLoginForm.tsx` | Two thin pages sharing a form component; both POST to the same endpoint. Middleware allows both through unauthenticated. |
 | Admin-only route gates | `requireAdmin` on `/api/admin/departments/[id]`, `/api/admin/departments/merge`, `/api/admin/universities`, `/api/admin/universities/[id]`, `/api/admin/universities/[id]/departments`; page-level `redirect('/admin')` on `/admin/universities/*` | Moderators are blocked from catalog-editing endpoints and can't see the "Universities" nav entry. |
 | Staff user management | `/admin/users/page.tsx` + `CreateStaffForm` + `DeleteStaffButton`, `POST /api/admin/users`, `DELETE /api/admin/users/[id]` | Super-admin: create/delete admins + moderators. Admin: moderators only. Rejects self-delete, super_admin deletion, cross-tier promotion. |
+| Demo review seeder | `scripts/seed-demo-reviews.ts`, `pnpm db:seed:demo` | Deterministic synthetic users/courses/reviews for local UI work; aggregates folded in with `lib/aggregation.ts`; refuses non-local DBs. (#67) |
+| University rollups | `lib/university-stats.ts`, `app/universities/[slug]/page.tsx` | Per-dept count + score, top-5 professors (≥3 reviews), one query. (#68) |
+| Department listing controls | `lib/department-listing.ts`, department page | URL-driven sort/filter + Courses tab. (#69) |
+| Professor insights | `lib/review-insights.ts`, `lib/professor-insights.ts` | Tag counts + teaching distribution over counted reviews; viewer's reviewed courses. (#70) |
+| Trending | `lib/trending.ts`, `components/homepage/TrendingProfessors.tsx`, `reviews_submitted_at_idx` | 30-day window, counted reviews only, fails soft. (#71) |
+| Privacy policy | `lib/i18n/privacy.ts`, `app/privacy/page.tsx` | Written against the code; header note says schema/cookie/vendor changes must update it. (#72) |
+| Reader-cookie fix | `proxy.ts`, `lib/i18n/shared.ts`, `LanguageToggle` | `pk_lang` only on explicit toggle; Accept-Language fallback. (#73) |
+| Review quota + tag allowlist | `lib/rate-limit.ts`, `lib/validations/review.ts` | Dhaka-day buckets + HMAC key so the counter is not a timing join. (#74) |
+| Semester tracking | `lib/semester.ts`, `lib/semester-trend.ts`, migration `20261023130000_review_semester` | Optional, paired, CHECK-constrained. (#75) |
+| /me | `lib/my-activity.ts`, `app/me/page.tsx` | Account-scoped links only; removed reviews masked. (#76) |
+| Compare | `lib/compare.ts`, `lib/compare-loader.ts`, `app/compare/page.tsx` | URL-held selection, noindex. (#77) |
+| Search stats | `lib/search.ts#professorSearchStats` | Two queries per search regardless of hits. (#78) |
+| Staff audit log | `lib/audit.ts`, migration `20261023140000_admin_audit_log`, `app/admin/audit/page.tsx` | Written inside each action's transaction; survives staff deletion. (#79) |
+| Course page filters | `lib/course-review-filters.ts`, `lib/course-alternatives.ts` | Recommend / written / tag filters; other teachers of the course. (#80) |
 
 ### Planned Features (from SRS)
 
@@ -622,4 +636,4 @@ As features are completed, add them here for quick lookup.
 | Admin panel                      | P0       | ✅ Done (`feat/admin-panel`)            |
 | Soft moderation (keyword filter) | P0       | ✅ Done (`feat/review-submission`)      |
 | Site-wide stats                  | P0       | ✅ Done (Session 2)                     |
-| About / privacy policy page      | P0       | 🔲 Not started                          |
+| About / privacy policy page      | P0       | ✅ About done; privacy in #72           |

@@ -6,9 +6,9 @@
 
 ## Project Status
 
-**Phase:** Staff roles + separate admin/moderator login
-**Last updated:** July 2026 (Session 15)
-**Active branches:** `feat/admin-moderator-roles` (PR open, stacked on `feat/vercel-deployment-prep`)
+**Phase:** SRS gap-closing + Phase 2 features (Session 16, 14 PRs open for review)
+**Last updated:** October 2026 (Session 16)
+**Active branches:** see the Session 16 table below. Each branch is cut from `main` @ `1ee48d5` and is independent unless noted.
 
 ---
 
@@ -222,25 +222,81 @@
 - [x] **Docs**: SRS §4.5 gains **FR-MOD-06/07/08**; §6 `admin_users` redoc'd with the new columns and partial index; §7 route map adds login + `/admin/users`; §8 API spec adds the users endpoints + login body shape. Version bumped to 1.7. Build-log rows added.
 - [x] Local `DIRECT_URL` added to `.env.local`; `test/global-setup.integration.ts` sets `DIRECT_URL` for the integration DB; `.env.example` updated to note it's now required.
 
+### Sessions 16-ish gap (Jul–Aug 2026, PRs #47–#66, merged)
+
+Not individually logged here. See `git log` for: opaque professor URLs +
+name obfuscation, path-based locale routing, SEO (sitemap, JSON-LD, OG
+images), FAQ/blog/about/guidelines, top-professors leaderboard, share
+buttons, aggregate rollback on moderation, university email-domain
+eligibility gate, DU faculty seed, recent-reviews feed.
+
+### Session 16 — SRS gap-closing + Phase 2 features (14 PRs, all open)
+
+Every branch is cut from `main` and was verified against the local dev
+server with demo data (cross-checked against direct SQL where numbers are
+shown), plus unit and/or integration tests. CI is green on all of them.
+
+| PR  | Branch                                  | What                                                                                                                                              | SRS                           |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| #67 | `chore/dev-demo-reviews`                | `pnpm db:seed:demo` — deterministic synthetic reviews for local dev (refuses non-local DBs); `pnpm db:seed:du`                                    | dev tooling                   |
+| #68 | `feat/university-page-stats`            | Per-dept review count + score, top-5 professors, header totals, i18n                                                                              | FR-SEARCH-04, FR-STAT-04      |
+| #69 | `feat/department-sort-filter-courses`   | Sort (rated/reviewed/recent), filter (difficulty, recommended), Courses tab                                                                       | FR-SEARCH-05, Phase 2 catalog |
+| #70 | `feat/professor-insights`               | Rating distribution, top tags, per-course recommend %, "you reviewed this"                                                                        | FR-STAT-02, FR-AUTH-05        |
+| #71 | `feat/trending-professors`              | Homepage "trending this month" + `reviews(submitted_at)` index                                                                                    | Phase 2 trending              |
+| #72 | `feat/privacy-policy`                   | `/privacy` (bn + en), written against the actual code                                                                                             | NFR-PRIV-08 (P0)              |
+| #73 | `fix/no-cookie-for-readers`             | **Privacy bug**: proxy set `pk_lang` on every reader. Now only on explicit toggle; Accept-Language fallback                                       | NFR-PRIV-02, invariant #3     |
+| #74 | `feat/review-submission-hardening`      | 6 reviews / account / Dhaka day (HMAC'd, day-bucketed Redis key); tag allowlist                                                                   | NFR-SEC-07                    |
+| #75 | `feat/semester-tracking`                | Optional term + year on reviews (CHECK-constrained), card label, teaching-quality-over-time chart                                                 | Phase 2 semester              |
+| #76 | `feat/my-activity`                      | `/me`: reviewed courses, helpful votes, uni requests                                                                                              | FR-AUTH-05                    |
+| #77 | `feat/compare-professors`               | `/compare?ids=A,B,C` side-by-side, shareable URL                                                                                                  | new                           |
+| #78 | `feat/search-result-stats`              | Score, review count, top 2 tags on professor search hits; subtitle `COALESCE` fix                                                                 | FR-SEARCH-02                  |
+| #79 | `feat/admin-audit-log`                  | Append-only `admin_audit_log` for every staff action + `/admin/audit`; **handler-level `requireStaff`** on 4 routes that relied on the proxy only | accountability / security     |
+| #80 | `feat/course-page-filters-alternatives` | Course review filters (recommend / written / tag) + "also teaching this course"                                                                   | new                           |
+
+**Suggested merge order:** #73 before #72 (the policy describes the fixed
+cookie behaviour). #67 first if you want demo data while reviewing the
+rest. Overlapping files, all in independent hunks: `app/professors/[publicId]/page.tsx`
+(#70, #75, #77), `app/api/reviews/route.ts` + `lib/validations/review.ts`
+(#74, #75), `lib/redis.ts` (#71), `app/page.tsx` (#71). Three PRs add
+migrations: #71 (index), #75 (semester columns), #79 (audit table) — no
+ordering dependency between them.
+
+**Local verification notes:**
+
+- After any branch switch that changes `prisma/schema.prisma`, run
+  `prisma generate` **and restart `pnpm dev`** — the dev server keeps the
+  old client in memory and fails with "Unknown argument" / "undefined
+  findMany".
+- Signed-in pages were checked by minting a local NextAuth JWT (via
+  `next-auth/jwt`'s `encode` with the local `NEXTAUTH_SECRET`) for a
+  `demo-*` user, and staff pages by signing a `pk_admin_session` with the
+  local `ADMIN_SESSION_SECRET`. Nothing for this is committed.
+
+**Follow-ups found but not done:**
+
+- Self-serve account deletion needs a tombstone design — deleting `users`
+  cascades `review_submissions`, which would let someone re-review every
+  course after re-signing up (see #76).
+- Dark-mode palette exists in `app/globals.css` (`.dark`) but nothing
+  applies it; not done because it needs visual review.
+- Privacy policy names hosting/analytics generically pending the Vercel →
+  Lightsail decision (`docs/deployment/lightsail-deploy.md`, untracked).
+- `PATCH /api/admin/departments/[id]` is `requireAdmin`, but the Verify
+  button on `/admin/departments` (no role gate) is visible to moderators,
+  who get a 403 — and the `AdminRole` schema comment says moderators _can_
+  verify. Pick one.
+- `stats:site` counts only `moderation_status = 'live'`, so soft-flagged
+  reviews are excluded from the homepage total while they still count in
+  aggregates.
+
 ---
 
 ## What We Are Building Next
 
-After these PRs are merged, the next steps are:
-
-### Step 1 — Department typeahead + add-as-new
-
-Same pattern as professor: scoped search endpoint, debounced typeahead,
-"Add 'CSE - Computer Science and Engineering' as a new department"
-fallback with smart abbreviation/full-name parsing on the server.
-The review POST handler will auto-create a Department row when
-`department_id` is absent.
-
-### Step 2 — Admin merge tool
-
-Once add-as-new is live for departments, admins need a "Merge
-departments" action so duplicates ("CSE" + "Computer Science and
-Engineering" + "C.S.E.") can be collapsed into one canonical row.
+1. Review and merge the Session 16 PRs (see order above).
+2. Account deletion with a re-registration tombstone.
+3. Dark mode (system preference, no cookie) with a visual pass.
+4. Phase 3 candidates: public read-only API, professor response system.
 
 ---
 
