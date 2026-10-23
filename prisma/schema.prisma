@@ -259,6 +259,26 @@ model ReviewSubmission {
   @@map("review_submissions")
 }
 
+// Survives account deletion so that deleting an account cannot reset the
+// one-review-per-professor-course guard. Each row is
+//   HMAC-SHA256(ACCOUNT_TOMBSTONE_SECRET, google_sub || professor_course_id)
+// for one review_submissions row of a deleted account, and that hash is the
+// ONLY column:
+//   * no professor_course_id — rows reveal nothing about which courses were
+//     reviewed, so there is nothing to join against `reviews`;
+//   * no user reference — the account it came from no longer exists;
+//   * no timestamp — written at deletion time, it would still hand out a
+//     time axis that review_submissions deliberately lacks (see migration
+//     20260731120000).
+// The only question it can answer is "has THIS Google account reviewed THIS
+// professor_course before?", and only for someone holding both the secret
+// and the sub. See lib/account-tombstone.ts.
+model ReviewSubmissionTombstone {
+  keyHash String @id @map("key_hash") @db.Char(64)
+
+  @@map("review_submission_tombstones")
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Users — no email stored
 // ─────────────────────────────────────────────────────────────────────────────

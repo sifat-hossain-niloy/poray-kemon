@@ -90,6 +90,10 @@ vi.mock('@/lib/auth', () => ({
   handlers: { GET: vi.fn(), POST: vi.fn() },
 }))
 
+// DELETE /api/me refuses to run without a tombstone secret, and POST
+// /api/reviews only checks tombstones when one is set.
+process.env.ACCOUNT_TOMBSTONE_SECRET ??= 'integration-test-tombstone-secret-0123456789abcdef'
+
 beforeEach(() => {
   __redisStore.clear()
   vi.clearAllMocks()

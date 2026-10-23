@@ -4,6 +4,7 @@ import { getLocale } from '@/lib/i18n'
 import { localeAlternates } from '@/lib/i18n/alternates'
 import { PRIVACY_BN, PRIVACY_EN } from '@/lib/i18n/privacy'
 import { Card, CardContent } from '@/components/ui/card'
+import { DeleteAccountSection } from '@/components/account/DeleteAccountSection'
 
 // ISR — the policy changes rarely. Locale-keyed cache slot.
 export const revalidate = 3600
@@ -60,6 +61,10 @@ export default async function PrivacyPage() {
           </section>
         ))}
       </article>
+
+      <div className="mt-10">
+        <DeleteAccountSection returnTo={`/${locale}/privacy#delete-account`} />
+      </div>
 
       <div className="mt-12 flex justify-center gap-6 text-sm">
         <Link

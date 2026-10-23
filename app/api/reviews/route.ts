@@ -30,6 +30,7 @@ import { parseDepartmentName } from '@/lib/department-parser'
 import { deleteCache, CACHE_KEYS } from '@/lib/redis'
 import { getStrings } from '@/lib/i18n'
 import { checkEligibility, formatRequiredSuffixes } from '@/lib/eligibility'
+import { tombstoneKey, tombstoneSecret } from '@/lib/account-tombstone'
 
 export const dynamic = 'force-dynamic'
 
@@ -417,6 +418,28 @@ export async function POST(req: Request) {
         throw new DuplicateSubmissionError()
       }
 
+      // 5a'. Same guard across account deletion: an earlier, deleted account
+      // with this Google sub left a tombstone for each course it reviewed.
+      // Without the secret no deletion can have happened (DELETE /api/me
+      // refuses), so there is nothing to check against.
+      const submitter = await tx.user.findUnique({
+        where: { id: userId },
+        select: { googleId: true },
+      })
+      if (!submitter) {
+        throw new AccountGoneError()
+      }
+      const secret = tombstoneSecret()
+      if (secret) {
+        const tombstone = await tx.reviewSubmissionTombstone.findUnique({
+          where: { keyHash: tombstoneKey(secret, submitter.googleId, professorCourse.id) },
+          select: { keyHash: true },
+        })
+        if (tombstone) {
+          throw new DuplicateSubmissionError()
+        }
+      }
+
       // 5b. INSERT reviews — no user_id column on this table
       await tx.review.create({
         data: {
@@ -461,6 +484,13 @@ export async function POST(req: Request) {
       `
     })
   } catch (err) {
+    // A session cookie can outlive its account (deleted from another device).
+    if (err instanceof AccountGoneError) {
+      return NextResponse.json(
+        { error: (await getStrings()).errors.unauthorized, code: 'UNAUTHENTICATED' },
+        { status: 401 },
+      )
+    }
     if (err instanceof DuplicateSubmissionError) {
       return NextResponse.json(
         {
@@ -508,5 +538,12 @@ class DuplicateSubmissionError extends Error {
   constructor() {
     super('duplicate')
     this.name = 'DuplicateSubmissionError'
+  }
+}
+
+class AccountGoneError extends Error {
+  constructor() {
+    super('account gone')
+    this.name = 'AccountGoneError'
   }
 }

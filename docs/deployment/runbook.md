@@ -87,6 +87,9 @@ GOOGLE_CLIENT_SECRET="<from Google Cloud Console>"
 # ── Admin ─────────────────────────────────────────────
 ADMIN_SESSION_SECRET="<generate with: openssl rand -base64 48>"
 
+# ── Account deletion (never rotate) ───────────────────
+ACCOUNT_TOMBSTONE_SECRET="<generate with: openssl rand -base64 48>"
+
 # ── App ───────────────────────────────────────────────
 NEXT_PUBLIC_SITE_URL="http://localhost:3000"
 NODE_ENV="development"
