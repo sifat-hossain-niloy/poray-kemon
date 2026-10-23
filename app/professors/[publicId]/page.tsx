@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { auth } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +15,12 @@ import { ShareButton } from '@/components/share/ShareButton'
 import { localeAlternates } from '@/lib/i18n/alternates'
 import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
+import {
+  COUNTED_MODERATION_STATES,
+  ratingDistribution,
+  topTags,
+  type TagCount,
+} from '@/lib/review-insights'
 
 // Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
@@ -23,6 +30,8 @@ interface PageProps {
 }
 
 const REVIEWS_PER_COURSE_PREVIEW = 3
+const TOP_TAGS_PROFESSOR = 6
+const TOP_TAGS_COURSE = 3
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { publicId } = await params
@@ -63,6 +72,14 @@ export default async function ProfessorPage({ params }: PageProps) {
   const coursesHeading = locale === 'en' ? 'Courses' : 'কোর্সসমূহ'
   const coursesSuffix = locale === 'en' ? 'courses' : 'টি কোর্স'
   const outOfFive = locale === 'en' ? '/ 5' : '/ ৫'
+  const insightCopy = {
+    mostMentioned:
+      locale === 'en' ? 'What students mention most' : 'শিক্ষার্থীরা যা সবচেয়ে বেশি বলেছেন',
+    distribution: locale === 'en' ? 'Teaching quality ratings' : 'পড়ানোর মান — রেটিং বণ্টন',
+    stars: (n: number) =>
+      locale === 'en' ? `${n} star${n === 1 ? '' : 's'}` : `${n.toLocaleString(numberLocale)} তারা`,
+    youReviewed: locale === 'en' ? 'You reviewed this course' : 'আপনি এই কোর্সে রিভিউ দিয়েছেন',
+  }
   const seeAll = (n: number) =>
     locale === 'en'
       ? `See all ${n.toLocaleString(numberLocale)} reviews →`
@@ -118,16 +135,70 @@ export default async function ProfessorPage({ params }: PageProps) {
     })),
   )
 
-  // Fan-out viewer's votes across every review on the page in ONE query
+  // Everything below is keyed by professor_course id, so collect them once
+  // and fan out the per-page queries in parallel.
+  const pcIds = professor.professorCourses.map((pc) => pc.id)
   const allReviewIds = professor.professorCourses.flatMap((pc) => pc.reviews.map((r) => r.id))
-  const votedIds = new Set<number>()
-  if (viewerId && allReviewIds.length > 0) {
-    const votes = await db.helpfulVote.findMany({
-      where: { userId: viewerId, reviewId: { in: allReviewIds } },
-      select: { reviewId: true },
-    })
-    votes.forEach((v) => votedIds.add(v.reviewId))
+  const countedWhere = {
+    professorCourseId: { in: pcIds },
+    status: 'visible' as const,
+    moderationStatus: { in: [...COUNTED_MODERATION_STATES] },
   }
+  const [votes, mySubmissions, tagRows, teachingBuckets] = await Promise.all([
+    viewerId && allReviewIds.length > 0
+      ? db.helpfulVote.findMany({
+          where: { userId: viewerId, reviewId: { in: allReviewIds } },
+          select: { reviewId: true },
+        })
+      : [],
+    // FR-AUTH-05: a signed-in viewer sees which of these courses they've
+    // reviewed. review_submissions holds only (user, professor_course), so
+    // this never touches review content.
+    viewerId && pcIds.length > 0
+      ? db.reviewSubmission.findMany({
+          where: { userId: viewerId, professorCourseId: { in: pcIds } },
+          select: { professorCourseId: true },
+        })
+      : [],
+    pcIds.length > 0
+      ? db.$queryRaw<Array<{ pc_id: number; tag: string; count: number }>>`
+          SELECT r.professor_course_id AS pc_id, t.tag, COUNT(*)::int AS count
+          FROM reviews r, unnest(r.tags) AS t(tag)
+          WHERE r.professor_course_id IN (${Prisma.join(pcIds)})
+            AND r.status = 'visible'
+            AND r.moderation_status IN ('live', 'soft_flagged')
+          GROUP BY 1, 2
+        `
+      : [],
+    pcIds.length > 0
+      ? db.review.groupBy({
+          by: ['teachingQuality'],
+          where: countedWhere,
+          _count: { _all: true },
+        })
+      : [],
+  ])
+  const votedIds = new Set(votes.map((v) => v.reviewId))
+  const reviewedPcIds = new Set(mySubmissions.map((s) => s.professorCourseId))
+
+  const knownTags = new Set(Object.keys(strings.tags))
+  const tagLabels = strings.tags as Record<string, string>
+  const tagsByPc = new Map<number, TagCount[]>()
+  const professorTagTotals = new Map<string, number>()
+  for (const row of tagRows) {
+    const bucket = tagsByPc.get(row.pc_id) ?? []
+    bucket.push({ tag: row.tag, count: row.count })
+    tagsByPc.set(row.pc_id, bucket)
+    professorTagTotals.set(row.tag, (professorTagTotals.get(row.tag) ?? 0) + row.count)
+  }
+  const professorTopTags = topTags(
+    [...professorTagTotals].map(([tag, count]) => ({ tag, count })),
+    TOP_TAGS_PROFESSOR,
+    knownTags,
+  )
+  const distribution = ratingDistribution(
+    teachingBuckets.map((b) => ({ value: b.teachingQuality, count: b._count._all })),
+  )
 
   // JSON-LD: Person + AggregateRating so Google may show a star rating on
   // the SERP tile. The `name` uses the obfuscated English rendering — never
@@ -265,6 +336,56 @@ export default async function ProfessorPage({ params }: PageProps) {
               <Stat label={strings.ratings.courseDifficulty} value={combined.avgCourseDifficulty} />
               <Stat label={strings.ratings.attendance} value={combined.avgAttendance} />
             </div>
+
+            <div className="grid gap-5 border-t border-border pt-4 sm:grid-cols-2">
+              {distribution.total > 0 ? (
+                <div>
+                  <h3 className="mb-2 text-xs font-medium text-muted-foreground">
+                    {insightCopy.distribution}
+                  </h3>
+                  <ul className="space-y-1">
+                    {[5, 4, 3, 2, 1].map((star) => (
+                      <li key={star} className="flex items-center gap-2 text-xs">
+                        <span className="w-14 shrink-0 text-muted-foreground">
+                          {insightCopy.stars(star)}
+                        </span>
+                        <span
+                          className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
+                          aria-hidden
+                        >
+                          <span
+                            className="block h-full rounded-full bg-yellow-500"
+                            style={{ width: `${distribution.widths[star - 1] ?? 0}%` }}
+                          />
+                        </span>
+                        <span className="w-8 shrink-0 text-right tabular-nums text-muted-foreground">
+                          {(distribution.counts[star - 1] ?? 0).toLocaleString(numberLocale)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {professorTopTags.length > 0 ? (
+                <div>
+                  <h3 className="mb-2 text-xs font-medium text-muted-foreground">
+                    {insightCopy.mostMentioned}
+                  </h3>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {professorTopTags.map(({ tag, count }) => (
+                      <li key={tag}>
+                        <Badge variant="secondary" className="gap-1">
+                          {tagLabels[tag] ?? tag}
+                          <span className="tabular-nums text-muted-foreground">
+                            {count.toLocaleString(numberLocale)}
+                          </span>
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -287,6 +408,7 @@ export default async function ProfessorPage({ params }: PageProps) {
                 ? `/professors/${professor.publicId}/${courseSlug}`
                 : null
               const hasReviews = pc.reviewCount > 0
+              const courseTags = topTags(tagsByPc.get(pc.id) ?? [], TOP_TAGS_COURSE, knownTags)
 
               return (
                 <div key={pc.id} className="space-y-3">
@@ -301,15 +423,50 @@ export default async function ProfessorPage({ params }: PageProps) {
                           {strings.professor.reviewCount(pc.reviewCount)}
                         </span>
                       </div>
+                      {reviewedPcIds.has(pc.id) || (hasReviews && pc.wouldRecommendPct) ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {hasReviews && pc.wouldRecommendPct !== null ? (
+                            <Badge variant="secondary">
+                              {strings.professor.wouldRecommendPercent(
+                                Math.round(Number(pc.wouldRecommendPct.toString())),
+                              )}
+                            </Badge>
+                          ) : null}
+                          {reviewedPcIds.has(pc.id) ? (
+                            <Badge variant="outline" className="border-primary/40 text-primary">
+                              ✓ {insightCopy.youReviewed}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </CardHeader>
-                    <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                      <Stat label={strings.ratings.teachingQuality} value={pc.avgTeachingQuality} />
-                      <Stat label={strings.ratings.gradingFairness} value={pc.avgGradingFairness} />
-                      <Stat
-                        label={strings.ratings.courseDifficulty}
-                        value={pc.avgCourseDifficulty}
-                      />
-                      <Stat label={strings.ratings.attendance} value={pc.avgAttendance} />
+                    <CardContent className="space-y-3 text-sm">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <Stat
+                          label={strings.ratings.teachingQuality}
+                          value={pc.avgTeachingQuality}
+                        />
+                        <Stat
+                          label={strings.ratings.gradingFairness}
+                          value={pc.avgGradingFairness}
+                        />
+                        <Stat
+                          label={strings.ratings.courseDifficulty}
+                          value={pc.avgCourseDifficulty}
+                        />
+                        <Stat label={strings.ratings.attendance} value={pc.avgAttendance} />
+                      </div>
+                      {courseTags.length > 0 ? (
+                        <ul className="flex flex-wrap gap-1.5">
+                          {courseTags.map(({ tag }) => (
+                            <li key={tag}>
+                              <Badge variant="outline" className="text-[10px]">
+                                {tagLabels[tag] ?? tag}
+                              </Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </CardContent>
                   </Card>
 
