@@ -4,6 +4,7 @@ import { getLocale, getStrings } from '@/lib/i18n'
 import { SearchBox } from '@/components/search/SearchBox'
 import { FirstVisitDisclaimer } from '@/components/homepage/FirstVisitDisclaimer'
 import { TopProfessorsLeaderboard } from '@/components/homepage/TopProfessorsLeaderboard'
+import { TrendingProfessors } from '@/components/homepage/TrendingProfessors'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
 
 // ── Site stats fetched once per minute via Redis ──────────────────────────────
@@ -109,6 +110,8 @@ export default async function HomePage() {
       </main>
 
       {/* ── Top-rated professors leaderboard ──────────────────────────────── */}
+      <TrendingProfessors />
+
       <TopProfessorsLeaderboard />
 
       {/* ── Anonymity assurance ────────────────────────────────────────────── */}

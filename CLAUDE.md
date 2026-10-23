@@ -64,6 +64,8 @@ docker compose down         # Stop all containers
 # Database
 pnpm db:migrate             # Run Prisma migrations
 pnpm db:seed                # Seed universities + departments
+pnpm db:seed:du             # Seed DU departments + professors (local)
+pnpm db:seed:demo           # Synthetic courses + reviews (local only, refuses remote DBs)
 pnpm db:studio              # Open Prisma Studio
 
 # Testing
