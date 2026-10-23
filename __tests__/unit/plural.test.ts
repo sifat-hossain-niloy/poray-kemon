@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { plural } from '@/lib/i18n/shared'
+import { plural } from '@/lib/i18n/plural'
 import { BN } from '@/lib/i18n/strings-bn'
 import { EN } from '@/lib/i18n/strings-en'
 

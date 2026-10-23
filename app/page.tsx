@@ -1,5 +1,5 @@
 import { getSiteStats } from '@/lib/site-stats'
-import { plural } from '@/lib/i18n/shared'
+import { plural } from '@/lib/i18n/plural'
 import { getLocale, getStrings } from '@/lib/i18n'
 import { SearchBox } from '@/components/search/SearchBox'
 import { FirstVisitDisclaimer } from '@/components/homepage/FirstVisitDisclaimer'
