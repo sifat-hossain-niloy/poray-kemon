@@ -428,6 +428,8 @@ export async function POST(req: Request) {
           wouldRecommend: data.would_recommend,
           reviewText: data.review_text?.trim() || null,
           tags: data.tags,
+          semesterTerm: data.semester_term ?? null,
+          semesterYear: data.semester_year ?? null,
           moderationStatus: verdict.kind === 'soft_flag' ? 'soft_flagged' : 'live',
           moderationReason: verdict.kind === 'soft_flag' ? verdict.reason : null,
         },

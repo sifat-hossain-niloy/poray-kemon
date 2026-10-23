@@ -14,6 +14,7 @@ import { ShareButton } from '@/components/share/ShareButton'
 import { localeAlternates } from '@/lib/i18n/alternates'
 import { breadcrumbJsonLd } from '@/lib/seo/breadcrumbs'
 import { LocaleLink as Link } from '@/components/i18n/LocaleLink'
+import { semesterLabel, semesterTrend } from '@/lib/semester'
 
 // Dynamic: per-viewer vote state can't be cached.
 export const dynamic = 'force-dynamic'
@@ -127,6 +128,45 @@ export default async function ProfessorPage({ params }: PageProps) {
       select: { reviewId: true },
     })
     votes.forEach((v) => votedIds.add(v.reviewId))
+  }
+
+  // Semester trend (SRS Phase 2). Counted reviews only — the same set that
+  // feeds the aggregates — grouped by the optional term the reviewer gave.
+  const semesterRows =
+    professor.professorCourses.length > 0
+      ? await db.review.groupBy({
+          by: ['semesterTerm', 'semesterYear'],
+          where: {
+            professorCourseId: { in: professor.professorCourses.map((pc) => pc.id) },
+            status: 'visible',
+            moderationStatus: { in: ['live', 'soft_flagged'] },
+            semesterTerm: { not: null },
+            semesterYear: { not: null },
+          },
+          _avg: { teachingQuality: true },
+          _count: { _all: true },
+        })
+      : []
+  const trend = semesterTrend(
+    semesterRows.flatMap((row) =>
+      row.semesterTerm && row.semesterYear && row._avg.teachingQuality !== null
+        ? [
+            {
+              term: row.semesterTerm,
+              year: row.semesterYear,
+              count: row._count._all,
+              avgTeaching: row._avg.teachingQuality,
+            },
+          ]
+        : [],
+    ),
+  )
+  const trendCopy = {
+    heading: locale === 'en' ? 'Teaching quality over time' : 'সময়ের সাথে পড়ানোর মান',
+    sub:
+      locale === 'en'
+        ? 'Average teaching-quality rating per semester, for semesters with at least 2 reviews.'
+        : 'প্রতি সেমিস্টারে পড়ানোর মানের গড় রেটিং (কমপক্ষে ২টি রিভিউ আছে এমন সেমিস্টার)।',
   }
 
   // JSON-LD: Person + AggregateRating so Google may show a star rating on
@@ -269,6 +309,39 @@ export default async function ProfessorPage({ params }: PageProps) {
         </Card>
       ) : null}
 
+      {/* ── Semester trend (SRS Phase 2) ──────────────────────────────────── */}
+      {trend.length > 0 ? (
+        <Card className="mb-8">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{trendCopy.heading}</CardTitle>
+            <p className="text-xs text-muted-foreground">{trendCopy.sub}</p>
+          </CardHeader>
+          <CardContent>
+            <ol className="space-y-1.5">
+              {trend.map((point) => (
+                <li key={`${point.term}-${point.year}`} className="flex items-center gap-3 text-xs">
+                  <span className="w-24 shrink-0 text-muted-foreground">
+                    {semesterLabel(point.term, point.year, locale)}
+                  </span>
+                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                    <span
+                      className="block h-full rounded-full bg-primary"
+                      style={{ width: `${(point.avgTeaching / 5) * 100}%` }}
+                    />
+                  </span>
+                  <span className="w-8 shrink-0 text-right font-semibold tabular-nums">
+                    {point.avgTeaching.toFixed(1)}
+                  </span>
+                  <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">
+                    ({point.count.toLocaleString(numberLocale)})
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* ── Courses + preview reviews (SRS §4.6 FR-STAT-02 — Level 2) ────── */}
       <section>
         <h2 className="mb-4 text-xl font-semibold">{coursesHeading}</h2>
@@ -330,6 +403,8 @@ export default async function ProfessorPage({ params }: PageProps) {
                             helpfulCount: r.helpfulCount,
                             submittedAt: r.submittedAt,
                             moderationStatus: r.moderationStatus,
+                            semesterTerm: r.semesterTerm,
+                            semesterYear: r.semesterYear,
                           }}
                           userVoted={votedIds.has(r.id)}
                           professorPublicId={professor.publicId}

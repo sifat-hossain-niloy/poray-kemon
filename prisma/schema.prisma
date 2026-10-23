@@ -52,6 +52,12 @@ enum ModerationStatus {
   deleted
 }
 
+enum SemesterTerm {
+  spring
+  summer
+  fall
+}
+
 enum ReviewStatus {
   visible
   hidden
@@ -222,6 +228,9 @@ model Review {
   moderationNotes     String?          @map("moderation_notes")
   status              ReviewStatus     @default(visible)
   submittedAt         DateTime         @default(now()) @map("submitted_at")
+  // Optional, and both-or-neither (CHECK constraint in the migration).
+  semesterTerm        SemesterTerm?    @map("semester_term")
+  semesterYear        Int?             @map("semester_year") @db.SmallInt
 
   professorCourse ProfessorCourse @relation(fields: [professorCourseId], references: [id])
   helpfulVotes    HelpfulVote[]
